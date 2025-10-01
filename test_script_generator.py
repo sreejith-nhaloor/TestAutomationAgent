@@ -1,14 +1,8 @@
-from utils import fetch_llm_response, get_apk_path, get_prompt_rules
-from constants import TEST_STEPS
-import xml.etree.ElementTree as ET
-from appium import webdriver
-from appium.options.android import UiAutomator2Options
-from appium.webdriver.common.appiumby import AppiumBy
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from utils import *
+from constants import TEST_STEPS, PROMPT_RULES
 import time
 import re
+from selenium.webdriver.common.by import By
 
 def extract_ui_elements(driver):
     """Grab all UI elements with their key attributes."""
@@ -21,7 +15,11 @@ def extract_ui_elements(driver):
                 "resource_id": el.get_attribute("resource-id"),
                 "class": el.get_attribute("className"),
                 "content_desc": el.get_attribute("contentDescription"),
-                "bounds": el.get_attribute("bounds")
+                "bounds": el.get_attribute("bounds"),
+                "focusable" : el.get_attribute("focusable"),
+                "enabled": el.get_attribute("enabled"),                
+                "focused": el.get_attribute("focused"),
+                "selected": el.get_attribute("selected")
             })
         except Exception as e:
             print(f"Error reading element: {e}")
@@ -29,8 +27,16 @@ def extract_ui_elements(driver):
 
 
 def clean_generated_code(raw):
-    print("removing reasoning tag")
     raw = re.sub(r'<reasoning>.*?</reasoning>', '', raw, flags=re.DOTALL | re.IGNORECASE)
+
+    raw = raw.replace(";;", ";")
+
+    match = re.search(r'<PythonDetails>(.*?)</PythonDetails>', raw, re.DOTALL | re.IGNORECASE)
+    if match:
+        raw = match.group(1).strip()
+    else:
+        raw = ""
+
 
     """Remove markdown code blocks and keep only Python code."""    
     code_match = re.search(r"```(?:python)?\s*(.*?)```", raw, re.DOTALL | re.IGNORECASE)
@@ -41,85 +47,53 @@ def clean_generated_code(raw):
 
 
 def resolve_actions_with_ui(nl_step, ui_elements):
-    """Ask the LLM to turn NL into valid Appium code using only known selectors."""
     context = "\n".join([
-        f"Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}"
-        for e in ui_elements if e["text"] or e["content_desc"] or e["resource_id"]
+        f"Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}, Focusable: {e['focusable']}, Enabled: {e['enabled']}, Focused: {e['focused']}, Selected: {e['selected']}, Class: {e['class']} "
+        for e in ui_elements if e["text"] or e["content_desc"] or e["resource_id"] or e["focusable"] or e['enabled'] or e['focused'] or e['selected'] or e['class']
     ])
 
-    rules = get_prompt_rules()
     prompt = f"""
-You are a UI automation assistant. Create Appium Python code to perform the following step in a mobile app using only the Available UI elements mentioned here.
+You are a UI automation assistant.
 
 Available UI elements:
 {context}
 
-{rules}
+{PROMPT_RULES}
 
 Step: "{nl_step}"
 """
     return fetch_llm_response(prompt)
 
-    
-
+# Helper: remove elements with null/empty/"None" resource_id
+def remove_unwanted_elements(ui_elements):
+    return [e for e in ui_elements if e.get("resource_id") != "null" or e.get("content_desc") != "null" or e.get("text")]
 
 def run_test():
     print("🚀 Running: Multi-step test")
-
-    steps = TEST_STEPS
-
-    # Appium driver setup
-    options = UiAutomator2Options()
-    options.platform_name = "Android"
-    options.automation_name = "UiAutomator2"
-    options.device_name = "Android Emulator"
-    # Load APK path from utility function
-    options.app = get_apk_path()
-    options.app_package = "com.expedia.bookings"
-    options.app_activity = "com.expedia.bookings.activity.SearchActivity"
-
-    driver = webdriver.Remote("http://localhost:4723", options=options)
+    driver = initiate_appium_driver()
     time.sleep(5)
-    # Helper: remove elements with null/empty/"None" resource_id
-    def remove_null_resource_id(ui_elements):
-        filtered = []
-        for e in ui_elements:
-            rid = e.get("resource_id")
-            if rid and str(rid).strip().lower() != "null":
-                filtered.append(e)
-        return filtered
 
+    delete_output_file()  # Clear previous output file
     # Execute each step
-    for idx, step in enumerate(steps, start=1):
+    for idx, step in enumerate(TEST_STEPS, start=1):
         print(f"\n🔹 Step {idx}: {step}")
-
-        # Refresh UI elements for the current screen
         ui_elements = extract_ui_elements(driver)
-
-        # Remove elements with null/empty resource_id
-        #ui_elements = remove_null_resource_id(ui_elements)
-
-        # Print extracted UI elements for debugging
         print("\n📍 Available selectors on this page:")
+        for e in ui_elements:
+            print(f"  Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}")
+        ui_elements = remove_unwanted_elements(ui_elements)
+        print("\n📍 Available selectors after filtering:")
         for e in ui_elements:
             print(f"  Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}")
 
         # Generate step-specific code
         generated_code_raw = resolve_actions_with_ui(step, ui_elements)
-        #generated_code = clean_generated_code(generated_code_raw)
-
-        print(f"\n💡 Generated code:\n{generated_code_raw}")
-        #print(f"\n💡 Formatted code:\n{generated_code}")
+        generated_code = clean_generated_code(generated_code_raw)
+        print(f"\n💡 Generated code:\n{generated_code}")
 
         try:
-            exec(generated_code_raw, {
-                "driver": driver,
-                "time": time,
-                "By": By,
-                "AppiumBy": AppiumBy,
-                "WebDriverWait": WebDriverWait,
-                "EC": EC
-            })
+            execute_appium_code(driver, generated_code)
+            append_to_file(generated_code)
         except Exception as e:
             print(f"❌ Error in step {idx}: {e}")
             break

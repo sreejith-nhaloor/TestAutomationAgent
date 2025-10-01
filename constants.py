@@ -1,17 +1,56 @@
 TEST_STEPS = [
-	"Close the sign in page.",
-	"In the allow notification pop-up, click on Don't Allow.",
-	"Close the location access pop-up.",
-	"Click on Flights.",
-	"Search for flights from COK to BLR on dates Oct 8 to Oct 9."
+	"Close the popup by clicking the 'X' button.",
+    "If prompted, close the popup by clicking the 'Allow' button.",
+    "Close the popup by clicking the 'X' button.",
+    "Click on the 'Flights' text or tab to begin flight search.",
+    "Click on the 'One-Way' tab ",
+    "Click on the 'Leaving From Button' input field.",
+    "Tap on the 'Leaving From' field to activate the location input field.",        
+    "Clear any existing data from the 'Leaving From' location input. And type 'Cochin' into 'Leaving From' input field",                
+    "Click on the non-focusable but clickable 'Cochin' element from the list",
+    "Tap on the 'Going To' field to activate the location input field.",        
+    "Tap on the area labeled 'Going to' to activate the location input field.",
+    "Clear any existing data from the 'Going to' location input. And type 'Bengaluru' into 'Going to' location input field",
+    "Click on the non-focusable but clickable 'Bengaluru' element from the list",
+    "Click on the search button",
+    "Click on first flight from the list which matches like 'Air India'",
+    "Click on the first 'select' button ",
+    "Click on the 'Checkout' button"
 ]
 PROMPT_RULES = """
 Rules:
-1. Use ONLY selectors from the given list.
-2. Return ONLY executable Python code, no extra explanations, no markdown formatting.
-3. If an element has a Content-Desc, always use: driver.find_element(AppiumBy.ACCESSIBILITY_ID, "<content-desc>")
-4. For waiting, always use: WebDriverWait(driver, 10).until(EC.presence_of_element_located((AppiumBy.ACCESSIBILITY_ID, "<value>")))
-5. Assume driver, time, By, AppiumBy, WebDriverWait, and EC are already imported.
-6. Never import anything in your code. Do not re-initialize driver. Do not use from appium import Appium.
-7. If an element is having only Text, always use: driver.find_element(By.XPATH, "//*[@text='<Text>']")
+1. To interact with an input field using only XPath for element identification—do not use resource-id, accessibility ID, class name, or text attributes.
+2. Use ONLY selectors from the provided list. Do NOT invent or use unlisted selectors or methods.
+3. For waiting, always use:
+   WebDriverWait(driver, 10).until(EC.presence_of_element_located((AppiumBy.ACCESSIBILITY_ID, "<value>")))
+4. Return executable Python code inside a <PythonDetails> tag:
+   - Each line must be a single line ending with a semicolon.
+   - No markdown formatting.
+   - No explanations or comments.
+5. Do NOT import anything. Assume the following are already imported:
+   - driver
+   - time
+   - By
+   - AppiumBy
+   - WebDriverWait
+   - EC
+6. Do NOT reinitialize the driver. Do NOT use "from appium import Appium".
+7. Each Python code line must be a single executable statement ending with a semicolon.
+8. Do NOT include any reasoning, explanation, or commentary in the output. Only return the final result in the required format. Omit any <reasoning> or descriptive content.
+9. If an element is having only Text, always use:
+    driver.find_element(By.XPATH, "//*[@text='<Text>']")
+10. If an element data is to be cleared Text, always use:
+   driver.find_element(By.XPATH, "//*[@text='<Text>']").clear()
+11. If an element is having only Content-Desc, always use:
+   driver.find_element(AppiumBy.ACCESSIBILITY_ID, "<content-desc>")
+12. Do not consider suggestion text like 'Search by city or airport'
+13. For a non-focusable element always add inside the find_element:
+     @focusable='false'  
+14. Remove all semicolons (;) that are:
+    At the end of a line.
+    Immediately before or after a method call (e.g., .click(); .click()).
+15. Fix misplaced dots (.):
+    If a dot (.) appears after a semicolon, move it to the correct position before the method (e.g., ;.click() → .click()).
+16. Preserve valid method chaining:
+    Ensure that method calls like .click() remain intact and attached to the correct object.
 """
