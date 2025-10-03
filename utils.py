@@ -7,12 +7,14 @@ import importlib.util
 import sys
 from botocore.exceptions import ClientError
 from aws_config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, region_name
+from models import Step, TestCase
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from typing import List
 import tiktoken
 
 
@@ -112,3 +114,51 @@ def countToken(text):
     enc = tiktoken.encoding_for_model("gpt-4")
     tokens = enc.encode(text)
     print("Token count:", len(tokens))
+
+
+def parse_natural_language_steps_to_testcase(nl_text: str) -> List[TestCase]:
+    """
+    Parses a natural language test case string and returns a TestCase object.
+    Extracts steps from lines under **STEPS:**.
+    """
+    testCaseArray = []
+    steps = list()
+    in_steps = False
+    in_test_case = False
+    in_test_case_end = False
+    test_case_name = ""
+    testCase: TestCase = None
+    for line in nl_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        if line.startswith('**STEPS:**'):
+            in_steps = True
+            continue
+
+        if line.startswith('**TEST CASE:**'):
+            in_test_case = True
+            continue
+
+        if line.startswith('**TEST CASE END:**'):
+            in_steps = False
+            testCase = TestCase(scenario_name=test_case_name, steps=steps, test_case_id=len(testCaseArray)+1)
+            testCaseArray.append(testCase)
+            test_case_name = ""
+            steps = list()
+            continue
+
+        if in_test_case:
+            test_case_name = line
+            in_test_case = False
+            continue
+
+        if in_steps:
+            step: Step = Step(description=line, step_id=len(steps)+1)
+            steps.append(step)
+            continue
+
+    return testCaseArray
+
+

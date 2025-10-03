@@ -17,6 +17,9 @@ TEST_STEPS = [
     "Click on the first 'select' button ",
     "Click on the 'Checkout' button"
 ]
+
+
+
 PROMPT_RULES = """
 Rules:
 1. To interact with an input field using only XPath for element identification—do not use resource-id, accessibility ID, class name, or text attributes.
@@ -53,4 +56,32 @@ Rules:
     If a dot (.) appears after a semicolon, move it to the correct position before the method (e.g., ;.click() → .click()).
 16. Preserve valid method chaining:
     Ensure that method calls like .click() remain intact and attached to the correct object.
+"""
+
+
+
+
+
+TEST_STEPS_IN_NATURAL_LANGUAGE = """
+**TEST CASE:** 
+Verify flight search functionality on the mobile app.
+
+**STEPS:**
+Close the popup by clicking the 'X' button.
+If prompted, close the popup by clicking the 'Allow' button.
+Close the popup by clicking the 'X' button.
+Click on the 'Flights' text or tab to begin flight search.
+Click on the 'Leaving From Button' input field.
+**TEST CASE END:**
+
+**TEST CASE:** 
+Analyse flight search functionality on the mobile app.
+
+**STEPS:**
+- Close the popup by clicking the 'X' button.
+- If prompted, close the popup by clicking the 'Allow' button.
+- Close the popup by clicking the 'X' button.
+- Click on the 'Flights' text or tab to begin flight search.
+- Click on the 'Leaving From Button' input field.
+**TEST CASE END:**
 """
