@@ -3,6 +3,9 @@ from constants import TEST_STEPS, PROMPT_RULES
 import time
 import re
 from selenium.webdriver.common.by import By
+from models import Step, TestCase
+from models import TestResult
+from typing import List
 
 def extract_ui_elements(driver):
     """Grab all UI elements with their key attributes."""
@@ -37,13 +40,15 @@ def clean_generated_code(raw):
     else:
         raw = ""
 
-
     """Remove markdown code blocks and keep only Python code."""    
     code_match = re.search(r"```(?:python)?\s*(.*?)```", raw, re.DOTALL | re.IGNORECASE)
     
     if code_match:
         return code_match.group(1).strip()
     return raw.strip()
+
+
+
 
 
 def resolve_actions_with_ui(nl_step, ui_elements):
@@ -68,15 +73,21 @@ Step: "{nl_step}"
 def remove_unwanted_elements(ui_elements):
     return [e for e in ui_elements if e.get("resource_id") != "null" or e.get("content_desc") != "null" or e.get("text")]
 
-def run_test():
+def run_test(test_case: TestCase) -> TestResult:
     print("🚀 Running: Multi-step test")
     driver = initiate_appium_driver()
     time.sleep(5)
 
     delete_output_file()  # Clear previous output file
+
+    # steps = TEST_STEPS
+    steps = test_case.steps
+    return_exception: any = None
+    return_status: str = "success"
+
     # Execute each step
-    for idx, step in enumerate(TEST_STEPS, start=1):
-        print(f"\n🔹 Step {idx}: {step}")
+    for idx, step in enumerate(steps, start=1):
+        print(f"\n🔹 Step {idx}: {step.description}")
         ui_elements = extract_ui_elements(driver)
         print("\n📍 Available selectors on this page:")
         for e in ui_elements:
@@ -87,22 +98,30 @@ def run_test():
             print(f"  Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}")
 
         # Generate step-specific code
-        generated_code_raw = resolve_actions_with_ui(step, ui_elements)
+        generated_code_raw = resolve_actions_with_ui(step.description, ui_elements)
         generated_code = clean_generated_code(generated_code_raw)
         print(f"\n💡 Generated code:\n{generated_code}")
 
         try:
             execute_appium_code(driver, generated_code)
             append_to_file(generated_code)
+
         except Exception as e:
             print(f"❌ Error in step {idx}: {e}")
+            return_exception = e
+            return_status = "failed"
             break
 
         time.sleep(2)  # Small wait between steps
 
     driver.quit()
+    return TestResult(status=return_status, test_case_details=test_case, errors=str(return_exception))
+
+
 
 
 if __name__ == "__main__":
-    run_test()
-    
+    # Create a dummy TestCase object with steps
+    test_case = TestCase(steps=[Step(description=s, script="") for s in TEST_STEPS])
+    run_test(test_case)
+
