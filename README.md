@@ -1,4 +1,5 @@
 # TestAutomationAgent
+
 Project for generating automation scripts using AI
 ## 📦 Setup
 1. Start Appium: `appium`
