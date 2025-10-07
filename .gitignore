@@ -208,3 +208,6 @@ __marimo__/
 
 aws_config.py
 generated_code.txt
+generated_script_cucumber.txt
+generated_script_pom.txt
+extracted_classes/
