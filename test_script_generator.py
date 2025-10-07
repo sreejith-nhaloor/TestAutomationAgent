@@ -123,21 +123,21 @@ def run_test():
         print(f"\n💡 Generated code ended: ")
         generated_code = clean_generated_code(generated_code_raw)
 
-        print(f"\n💡 Formatted code : \n{generated_code}")
-        print(f"\n💡 Formatted code ended: ")
-
-        append_to_file(generated_code)
-        fetureDetails = extract_tag_content("FeatureDetails", generated_code_raw)
-        writeTofileCucumber(fetureDetails)
-        writeTofileCucumber("\n")
-
-        pomDetails = extract_tag_content("POMDetails", generated_code_raw)
-        writeTofilePom(pomDetails)
-        writeTofilePom("\n")
 
         try:
             execute_appium_code(driver, generated_code)
             
+            print(f"\n💡 Formatted code : \n{generated_code}")
+            print(f"\n💡 Formatted code ended: ")
+
+            append_to_file(generated_code)
+            fetureDetails = extract_tag_content("FeatureDetails", generated_code_raw)
+            writeTofileCucumber(fetureDetails)
+            writeTofileCucumber("\n")
+
+            pomDetails = extract_tag_content("POMDetails", generated_code_raw)
+            writeTofilePom(pomDetails)
+            writeTofilePom("\n")
             
         except Exception as e:
             print(f"❌ Error in step {idx}: {e}")
@@ -146,9 +146,9 @@ def run_test():
         time.sleep(4)  # Small wait between steps
 
     driver.quit()
+    create_files()
 
 
 if __name__ == "__main__":
-    run_test()
-    create_files()
+    run_test()    
     
