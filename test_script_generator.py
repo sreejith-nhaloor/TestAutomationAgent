@@ -7,6 +7,32 @@ from selenium.webdriver.common.by import By
 def extract_ui_elements(driver):
     """Grab all UI elements with their key attributes."""
     elements = driver.find_elements(By.XPATH, "//*")
+    print("Total elements found:", len(elements))
+    # for el in elements:
+    #     print("...."+el.get_attribute("className")+"..."+el.text+"...."+el.get_attribute("contentDescription"))
+
+    # Define interactable Android UI classes
+    interactable_classes = [
+        'android.widget.Button',
+        'android.widget.EditText',
+        'android.widget.CheckBox',
+        'android.widget.RadioButton',
+        'android.widget.Switch',
+        'android.widget.Spinner',
+        'android.widget.ImageButton',
+        'android.widget.TextView',
+        'android.widget.ImageButton',
+        'android.view.View',  # Sometimes clickable
+    ]
+
+    # Filter interactable elements
+    interactable_elements = [
+        el for el in elements
+        if el.is_displayed()         
+        and el.get_attribute("className") in interactable_classes
+    ]
+
+    print("Interactable elements found:", len(elements))
     ui_info = []
     for el in elements:
         try:
@@ -19,7 +45,7 @@ def extract_ui_elements(driver):
                 "focusable" : el.get_attribute("focusable"),
                 "enabled": el.get_attribute("enabled"),                
                 "focused": el.get_attribute("focused"),
-                "selected": el.get_attribute("selected")
+                "selected": el.get_attribute("selected")               
             })
         except Exception as e:
             print(f"Error reading element: {e}")
@@ -27,9 +53,12 @@ def extract_ui_elements(driver):
 
 
 def clean_generated_code(raw):
+    
     raw = re.sub(r'<reasoning>.*?</reasoning>', '', raw, flags=re.DOTALL | re.IGNORECASE)
 
     raw = raw.replace(";;", ";")
+    raw = raw.replace("..", ".")
+    raw = raw.replace("?.", ".")
 
     match = re.search(r'<PythonDetails>(.*?)</PythonDetails>', raw, re.DOTALL | re.IGNORECASE)
     if match:
@@ -47,6 +76,7 @@ def clean_generated_code(raw):
 
 
 def resolve_actions_with_ui(nl_step, ui_elements):
+    """Ask the LLM to turn NL into valid Appium code using only known selectors."""
     context = "\n".join([
         f"Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}, Focusable: {e['focusable']}, Enabled: {e['enabled']}, Focused: {e['focused']}, Selected: {e['selected']}, Class: {e['class']} "
         for e in ui_elements if e["text"] or e["content_desc"] or e["resource_id"] or e["focusable"] or e['enabled'] or e['focused'] or e['selected'] or e['class']
@@ -88,21 +118,37 @@ def run_test():
 
         # Generate step-specific code
         generated_code_raw = resolve_actions_with_ui(step, ui_elements)
+        
+        print(f"\n💡 Generated code : \n{generated_code_raw}")
+        print(f"\n💡 Generated code ended: ")
         generated_code = clean_generated_code(generated_code_raw)
-        print(f"\n💡 Generated code:\n{generated_code}")
+
+        print(f"\n💡 Formatted code : \n{generated_code}")
+        print(f"\n💡 Formatted code ended: ")
+
+        append_to_file(generated_code)
+        fetureDetails = extract_tag_content("FeatureDetails", generated_code_raw)
+        writeTofileCucumber(fetureDetails)
+        writeTofileCucumber("\n")
+
+        pomDetails = extract_tag_content("POMDetails", generated_code_raw)
+        writeTofilePom(pomDetails)
+        writeTofilePom("\n")
 
         try:
             execute_appium_code(driver, generated_code)
-            append_to_file(generated_code)
+            
+            
         except Exception as e:
             print(f"❌ Error in step {idx}: {e}")
             break
 
-        time.sleep(2)  # Small wait between steps
+        time.sleep(4)  # Small wait between steps
 
     driver.quit()
 
 
 if __name__ == "__main__":
     run_test()
+    create_files()
     
