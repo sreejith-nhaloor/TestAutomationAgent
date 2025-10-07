@@ -14,12 +14,19 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import tiktoken
-
+import shutil
+import re
+from constants import PROMPT_RULES_CUCUMBER,PROMPT_RULES_POM,PROMPT_RULES_TEST_CODE
 
 model_id = "qwen.qwen3-coder-480b-a35b-v1:0"
 # Create an Amazon Bedrock Runtime client.
 
 output_file_name = "generated_code.txt"
+file_name_cucumber = "generated_script_cucumber.txt"
+file_name_pom = "generated_script_pom.txt"
+file_name = "generated_script.txt"
+file_name_consolidated_cucumber = "complete_flight_booking.feature"
+output_dir="extracted_classes/test-script"
 
 # Initialize Bedrock client with credentials
 bedrock = boto3.client(
@@ -38,7 +45,7 @@ request_payload = {
         }
     ],
     "temperature": 0.5,
-    "max_tokens": 512,
+    "max_tokens": 2048,
     "top_p": 0.9
     }
 
@@ -83,6 +90,12 @@ def delete_output_file():
     if os.path.exists(output_file_name):
         os.remove(output_file_name)
         print(f"{output_file_name} has been deleted.")
+    with open(file_name_cucumber, "w") as file:
+        file.write("")
+    with open(file_name_pom, "w") as file:
+        file.write("")   
+    
+    delete_folder("extracted_classes")    
 
 def initiate_appium_driver():
     # Appium driver setup
@@ -112,3 +125,201 @@ def countToken(text):
     enc = tiktoken.encoding_for_model("gpt-4")
     tokens = enc.encode(text)
     print("Token count:", len(tokens))
+
+def extract_tag_content(tag_name, content):
+    
+    
+    start_tag = f"<{tag_name}>"
+    end_tag = f"</{tag_name}>"
+    
+    start_index = content.find(start_tag)
+    end_index = content.find(end_tag)
+    
+    if start_index == -1 or end_index == -1:
+        return None  # Tag not found
+    
+    # Extract content inside the tag
+    return content[start_index + len(start_tag):end_index].strip()  
+
+def writeTofileCucumber(code_to_write):    
+    if code_to_write and code_to_write.strip(): 
+        with open(file_name_cucumber, "a") as file:
+            file.write(code_to_write)
+            file.write("\n\n")
+
+def writeTofilePom(code_to_write):    
+    if code_to_write and code_to_write.strip(): 
+        with open(file_name_pom, "a") as file:
+            file.write(code_to_write)   
+            file.write("\n\n")    
+
+def delete_folder(folder_path):
+    if os.path.exists(folder_path):
+        shutil.rmtree(folder_path)
+        print(f"Deleted folder: {folder_path}")
+    else:
+        print(f"Folder not found: {folder_path}")
+
+def create_files():
+    cuccumber_feature = clean_and_extract_cuccumber_code()
+    cuccumber_feature = extract_tag_content("FeatureTag", cuccumber_feature)
+    writeTofileCucumberFeature(cuccumber_feature)    
+    
+    pom_details = clean_and_extract_pom_code()
+    class_pom_details = clean_code_for_classes(pom_details)
+    extract_and_create_classes(class_pom_details);
+
+    pom_test_details = clean_and_extract_pom_test_code()
+    test_pom_details = clean_code_for_testcode(pom_test_details)
+    extract_and_create_testclass(test_pom_details)
+
+def clean_code_for_classes(pom_details):
+    return clen_code_for_python_class_extract(extract_tag_content("ClassCode", pom_details))
+
+def clean_code_for_testcode(test_code):
+    return extract_tag_content("TestCode", test_code)
+
+def clen_code_for_python_class_extract(raw):
+    code_match = re.search(r"```(?:python)?\s*(.*?)```", raw, re.DOTALL | re.IGNORECASE)
+    
+    if code_match:
+        return code_match.group(1).strip()
+    return raw.strip()
+
+
+# Regex to extract classes with their full body (handles nested braces roughly)
+class_pattern = re.compile(r'class\s+(\w+)\s*{([^}]*(?:}(?!\s*class)[^}]*)*)}', re.DOTALL)
+
+# Regex to extract getters (properties)
+getter_pattern = re.compile(r'get\s+(\w+)\s*\([^)]*\)\s*{([^}]*)}', re.DOTALL)
+
+# Regex to extract methods (async or not)
+method_pattern = re.compile(r'(async\s+)?(\w+)\s*\([^)]*\)\s*{([^}]*)}', re.DOTALL)
+
+def extract_and_create_classes(source_code):
+
+    # Extract classes
+    classes = class_pattern.findall(source_code)
+
+    output_dir = "extracted_classes/poms"
+    os.makedirs(output_dir, exist_ok=True)
+
+    for class_name, class_body in classes:
+        properties = getter_pattern.findall(class_body)
+        methods = method_pattern.findall(class_body)
+
+        # Filter out getters from methods (since method_pattern also matches getters)
+        # We'll exclude methods whose name appears as getter
+        method_names = [m[1] for m in methods]
+        getter_names = [p[0] for p in properties]
+        
+        filtered_methods = [m for m in methods if m[1] not in getter_names]
+
+        # Prepare output text
+        output = f"class {class_name} {{\n\n"
+
+        # Add getters
+        for prop_name, prop_body in properties:
+            output += f"  // getter: {prop_name}\n"
+            output += f"  get {prop_name}() {{{prop_body.strip()}}}\n\n"
+
+        # Add methods
+        for async_kw, method_name, method_body in filtered_methods:
+            async_str = async_kw.strip() + " " if async_kw else ""
+            output += f"  // method: {method_name}\n"
+            output += f"  {async_str}{method_name}() {{{method_body.strip()}}}\n\n"
+
+        output += "}\n"
+
+        # Save to file
+        filename = os.path.join(output_dir, f"{class_name}.js")
+        with open(filename, "w") as f:
+            f.write(output)
+
+        print(f"Extracted class {class_name} to {filename}")
+
+
+def extract_and_create_testclass(source_code):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    file_path = os.path.join(output_dir, f"TestRun.js")
+
+    with open(file_path, "w") as file:
+        file.write(source_code + "\n")  
+
+def writeTofileCucumberFeature(code_to_write):    
+    output_dir = "extracted_classes/feature"
+    os.makedirs(output_dir, exist_ok=True)
+
+    if code_to_write and code_to_write.strip():         
+        filename = os.path.join(output_dir, file_name_consolidated_cucumber)
+        with open(filename, "w") as f:
+            f.write(code_to_write)
+            f.write("\n\n")    
+
+def clean_and_extract_cuccumber_code():
+    with open(file_name_cucumber, "r") as f:
+            raw_code = f.read()
+
+    prompt = f"""
+You are a UI automation assistant.
+
+Available UI elements:
+{raw_code}
+
+{PROMPT_RULES_CUCUMBER}
+"""
+
+    try:
+        response_text = fetch_llm_response(prompt)
+        print("invoken AWS bedrock for Cucumber start: ")
+        print(response_text)
+        print("invoken AWS bedrock for Cucumber end: ")
+        return response_text;
+    except (ClientError, Exception) as e:
+        return "ERROR: Can't invoke '{model_id}'. Reason: {e}"
+    
+
+def clean_and_extract_pom_code():
+    with open(file_name_pom, "r") as f:
+            raw_code = f.read()
+
+    prompt = f"""
+You are a code rewriting assistant.
+
+{PROMPT_RULES_POM}
+       
+Here is the code:
+{raw_code}
+"""
+
+    try:
+        response_text = fetch_llm_response(prompt)
+        print("invoken AWS bedrock for POM start: ")
+        print(response_text)
+        print("invoken AWS bedrock for POM end: ")
+        return response_text;
+    except (ClientError, Exception) as e:
+        return "ERROR: Can't invoke '{model_id}'. Reason: {e}"    
+    
+def clean_and_extract_pom_test_code():
+    with open(file_name_pom, "r") as f:
+            raw_code = f.read()
+
+    prompt = f"""
+You are a code extraction assistant.
+
+{PROMPT_RULES_TEST_CODE}
+    
+Here is the code:
+{raw_code}
+"""
+    try:
+        response_text = fetch_llm_response(prompt)
+        print("invoken AWS bedrock for test code start: ")
+        print(response_text)
+        print("invoken AWS bedrock for test code end: ")
+        return response_text;
+    except (ClientError, Exception) as e:
+        return "ERROR: Can't invoke '{model_id}'. Reason: {e}"   
