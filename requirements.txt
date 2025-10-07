@@ -1,3 +1,5 @@
 appium-python-client
 boto3
 tiktoken
+fastapi
+pydantic
