@@ -1,0 +1,13 @@
+github:
+  token: ""
+  repo_name: "kil0watt/AutomationExecutor"   
+  username: "CodeGeneratorBot"          
+  base_branch: "main"
+  file_path: "generated_code.txt"
+  commit_message: "Automated commit for PR"
+  pr_title: "Automated Pull Request"
+aws:
+  AWS_ACCESS_KEY_ID: ""
+  AWS_SECRET_ACCESS_KEY: ""
+  AWS_SESSION_TOKEN: ""
+  region_name: "ap-south-1"

@@ -206,5 +206,4 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-aws_config.py
 generated_code.txt

@@ -4,3 +4,6 @@ tiktoken
 fastapi
 pydantic
 uvicorn
+PyGithub
+GitPython
+pyyaml

@@ -3,11 +3,8 @@ import os
 import time
 import boto3
 import json
-import importlib.util
-import sys
 from botocore.exceptions import ClientError
-from aws_config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, region_name
-from models import Step, TestCase
+from models import TestCase
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
 from appium.webdriver.common.appiumby import AppiumBy
@@ -16,6 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from typing import List
 import tiktoken
+import yaml
 
 
 model_id = "qwen.qwen3-coder-480b-a35b-v1:0"
@@ -23,13 +21,16 @@ model_id = "qwen.qwen3-coder-480b-a35b-v1:0"
 
 output_file_name = "generated_code.txt"
 
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
 # Initialize Bedrock client with credentials
 bedrock = boto3.client(
     service_name='bedrock-runtime',
-    region_name=region_name,
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-    aws_session_token=AWS_SESSION_TOKEN
+    region_name=config.get('aws', {}).get('region_name'),
+    aws_access_key_id=config.get('aws', {}).get('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=config.get('aws', {}).get('AWS_SECRET_ACCESS_KEY'),
+    aws_session_token=config.get('aws', {}).get('AWS_SESSION_TOKEN')
 )
 
 request_payload = {

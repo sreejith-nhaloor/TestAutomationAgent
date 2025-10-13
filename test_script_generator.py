@@ -1,11 +1,11 @@
 from utils import *
-from constants import TEST_STEPS, PROMPT_RULES
+from constants import PROMPT_RULES
+from github_client import create_pull_request
 import time
 import re
 from selenium.webdriver.common.by import By
-from models import Step, TestCase
+from models import TestCase
 from models import TestResult
-from typing import List
 
 def extract_ui_elements(driver):
     """Grab all UI elements with their key attributes."""
@@ -80,14 +80,13 @@ def run_test(test_case: TestCase) -> TestResult:
 
     delete_output_file()  # Clear previous output file
 
-    # steps = TEST_STEPS
     steps = test_case.steps
     return_exception: any = None
     return_status: str = "success"
 
     # Execute each step
-    for idx, step in enumerate(steps, start=1):
-        print(f"\n🔹 Step {idx}: {step.description}")
+    for idx, step in enumerate(steps):
+        print(f"\n🔹 Step {idx}: {step}")
         ui_elements = extract_ui_elements(driver)
         print("\n📍 Available selectors on this page:")
         for e in ui_elements:
@@ -98,7 +97,7 @@ def run_test(test_case: TestCase) -> TestResult:
             print(f"  Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}")
 
         # Generate step-specific code
-        generated_code_raw = resolve_actions_with_ui(step.description, ui_elements)
+        generated_code_raw = resolve_actions_with_ui(step, ui_elements)
         generated_code = clean_generated_code(generated_code_raw)
         print(f"\n💡 Generated code:\n{generated_code}")
 
@@ -113,15 +112,9 @@ def run_test(test_case: TestCase) -> TestResult:
             break
 
         time.sleep(2)  # Small wait between steps
-
+    if return_status == "success":
+        pr_url=create_pull_request()
+    
     driver.quit()
-    return TestResult(status=return_status, test_case_details=test_case, errors=str(return_exception))
-
-
-
-
-if __name__ == "__main__":
-    # Create a dummy TestCase object with steps
-    test_case = TestCase(steps=[Step(description=s, script="") for s in TEST_STEPS])
-    run_test(test_case)
+    return TestResult(status=return_status, errors=str(return_exception),pull_request_url=pr_url)
 

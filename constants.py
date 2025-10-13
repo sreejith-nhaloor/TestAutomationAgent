@@ -1,25 +1,3 @@
-TEST_STEPS = [
-	"Close the popup by clicking the 'X' button.",
-    "If prompted, close the popup by clicking the 'Allow' button.",
-    "Close the popup by clicking the 'X' button.",
-    "Click on the 'Flights' text or tab to begin flight search.",
-    "Click on the 'One-Way' tab ",
-    "Click on the 'Leaving From Button' input field.",
-    "Tap on the 'Leaving From' field to activate the location input field.",        
-    "Clear any existing data from the 'Leaving From' location input. And type 'Cochin' into 'Leaving From' input field",                
-    "Click on the non-focusable but clickable 'Cochin' element from the list",
-    "Tap on the 'Going To' field to activate the location input field.",        
-    "Tap on the area labeled 'Going to' to activate the location input field.",
-    "Clear any existing data from the 'Going to' location input. And type 'Bengaluru' into 'Going to' location input field",
-    "Click on the non-focusable but clickable 'Bengaluru' element from the list",
-    "Click on the search button",
-    "Click on first flight from the list which matches like 'Air India'",
-    "Click on the first 'select' button ",
-    "Click on the 'Checkout' button"
-]
-
-
-
 PROMPT_RULES = """
 Rules:
 1. To interact with an input field using only XPath for element identification—do not use resource-id, accessibility ID, class name, or text attributes.

@@ -1,12 +1,7 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import List
-import requests
-import json
-
-from constants import TEST_STEPS, TEST_STEPS_IN_NATURAL_LANGUAGE
+from constants import TEST_STEPS_IN_NATURAL_LANGUAGE
 from test_script_generator import run_test
-from models import Step, TestCase
+from models import TestCase
 from utils import parse_natural_language_steps_to_testcase
 
 app = FastAPI()
