@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import List    
 
 class TestCase(BaseModel):
+    test_case_id: int
     scenario_name: str
     steps: List[str]
 

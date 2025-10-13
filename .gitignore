@@ -207,3 +207,6 @@ marimo/_lsp/
 __marimo__/
 
 generated_code.txt
+generated_script_cucumber.txt
+generated_script_pom.txt
+extracted_files/
