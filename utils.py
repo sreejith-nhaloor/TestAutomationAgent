@@ -48,7 +48,7 @@ request_payload = {
         }
     ],
     "temperature": 0.5,
-    "max_tokens": 2048,
+    "max_tokens": 4096,
     "top_p": 0.9
     }
 
@@ -78,6 +78,8 @@ def fetch_llm_response(prompt):
 
         # Extract content
         response_text = response_body["choices"][0]["message"]["content"]
+
+        #print("Response from Bedrock:", response_text)
         return response_text
 
     except (ClientError, Exception) as e:
@@ -114,16 +116,50 @@ def initiate_appium_driver():
 
     return webdriver.Remote("http://localhost:4723", options=options)
 
+def is_stale_element_error(error_msg):
+    """Check if the error is related to stale elements."""
+    stale_indicators = [
+        "stale", 
+        "cached elements", 
+        "do not exist in dom", 
+        "element is no longer attached",
+        "element not found",
+        "no such element",
+        "StaleElementReferenceException",
+        "ElementsCache.restore",
+        "ElementsCache.get"
+    ]
+    return any(indicator in error_msg.lower() for indicator in stale_indicators)
+
 def execute_appium_code(driver, code):
-    exec(code, {
-                "driver": driver,
-                "time": time,
-                "By": By,
-                "AppiumBy": AppiumBy,
-                "WebDriverWait": WebDriverWait,
-                "EC": EC
-            }
-        )
+    """Execute Appium code with proper exception handling for stale elements."""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            exec(code, {
+                        "driver": driver,
+                        "time": time,
+                        "By": By,
+                        "AppiumBy": AppiumBy,
+                        "WebDriverWait": WebDriverWait,
+                        "EC": EC
+                    }
+                )
+            return  # Success, exit
+        except Exception as e:
+            error_msg = str(e)
+            if is_stale_element_error(error_msg):
+                print(f"⚠️ Detected stale element error (attempt {attempt + 1}/{max_retries}): {error_msg}")
+                if attempt < max_retries - 1:
+                    print("🔄 Waiting for DOM to stabilize and retrying...")
+                    time.sleep(3)  # Wait longer for DOM to stabilize
+                    continue
+                else:
+                    print(f"❌ Code execution failed after {max_retries} attempts due to persistent stale elements")
+                    raise Exception(f"Persistent stale element error: {error_msg}")
+            else:
+                # Non-stale error, re-raise immediately
+                raise e
 def countToken(text): 
     enc = tiktoken.encoding_for_model("gpt-4")
     tokens = enc.encode(text)
@@ -439,3 +475,87 @@ Here is the code:
         return response_text;
     except (ClientError, Exception) as e:
         return "ERROR: Can't invoke '{model_id}'. Reason: {e}"   
+    
+# Execute each step
+def log_ui_elements(ui_elements, title):
+    print(f"\n📍 {title}:")
+    for e in ui_elements:
+        print(f"  Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}")   
+
+def process_generated_code(driver, generated_code, generated_code_raw):
+        execute_appium_code(driver, generated_code)
+        print(f"\n💡 Formatted code : \n{generated_code}")
+        print(f"\n💡 Formatted code ended: ")
+
+        append_to_file(generated_code)
+
+        fetureDetails = extract_tag_content("FeatureDetails", generated_code_raw)
+        writeTofileCucumber(fetureDetails)
+        writeTofileCucumber("\n")
+
+        pomDetails = extract_tag_content("POMDetails", generated_code_raw)
+        writeTofilePom(pomDetails)
+        writeTofilePom("\n") 
+        
+def check_if_page_scrollable(driver):
+    """Check if the current page/screen is scrollable."""
+    try:
+        # Method 1: Check for scrollable elements using UiAutomator
+        scrollable_elements = driver.find_elements(AppiumBy.ANDROID_UIAUTOMATOR, 
+            'new UiSelector().scrollable(true)')
+        
+        if scrollable_elements:
+            print(f"✅ Page is scrollable - Found {len(scrollable_elements)} scrollable containers")
+            return True
+        
+        # Method 2: Check for common scrollable view classes
+        scrollable_classes = [
+            'android.widget.ScrollView',
+            'android.widget.ListView', 
+            'android.widget.RecyclerView',
+            'androidx.recyclerview.widget.RecyclerView',
+            'android.support.v7.widget.RecyclerView'
+        ]
+        
+        for class_name in scrollable_classes:
+            elements = driver.find_elements(By.CLASS_NAME, class_name)
+            if elements:
+                print(f"✅ Page is scrollable - Found {class_name}")
+                return True
+        
+        # Method 3: Check viewport vs content size (if available)
+        try:
+            screen_size = driver.get_window_size()
+            # Try to detect if content extends beyond screen
+            all_elements = driver.find_elements(By.XPATH, "//*")
+            max_y = 0
+            for element in all_elements:
+                try:
+                    location = element.location
+                    size = element.size
+                    element_bottom = location['y'] + size['height']
+                    max_y = max(max_y, element_bottom)
+                except:
+                    continue
+            
+            if max_y > screen_size['height']:
+                print(f"✅ Page is scrollable - Content height ({max_y}) > Screen height ({screen_size['height']})")
+                return True
+        except:
+            pass
+            
+        print("❌ Page does not appear to be scrollable")
+        return False
+        
+    except Exception as e:
+        print(f"⚠️ Error checking scrollability: {e}")
+        return False
+    
+from appium import webdriver
+
+def detect_current_screen(driver):
+    try:
+        page_source = driver.page_source
+        return page_source
+    except Exception as e:
+        return f"Error detecting screen: {str(e)}"
