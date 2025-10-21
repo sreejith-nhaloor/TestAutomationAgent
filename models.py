@@ -15,3 +15,4 @@ class TestResult(BaseModel):
     path_appium_python_script: str = None
     pull_request_url: str = None
     errors: str 
+    elements: str

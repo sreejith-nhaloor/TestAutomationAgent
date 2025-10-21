@@ -73,6 +73,28 @@ Rules:
         ...Page Object class and test method here...
         </POMDetails>
     This applies even to basic actions like input, clear, or tap.
+24. When performing a SUBMIT action on a BUTTON, follow these strict guidelines:
+    1. Use exact text match only. Do not infer, modify, abbreviate, or hallucinate the element text.
+    2. If 'Your Element Text' has commas, then split by commas and use contains for each part.
+        Example: For 'Submit, Now', use:
+        driver.find_element(AppiumBy.XPATH,"//android.widget.Button[contains(@content-desc, 'Submit') and contains(@content-desc, 'Now')]").click()
+    3. If 'Your Element Text' has no commas, use:
+        driver.find_element(AppiumBy.XPATH,"//android.widget.Button[contains(@content-desc, 'Your Partial Text')]").click()
+    4. This rule applies to all clickable elements, including:
+        - Buttons
+        - Links
+        - Labels
+    5. Do not use partial matches, synonyms, or alternate phrasing.
+    6. Do not change the locator strategy unless explicitly instructed.
+    7. Always preserve the integrity of the specified text.    
+25. If an element is to be verified for existence, use below code snippet:
+    - For exact text match and existence verification, use:
+        element = driver.find_element(By.XPATH, "//*[@text='Your Element Text']");
+        assert element is not None;
+    - Replace "Your Element Text" with the actual text of the target element.
+    - Do not infer, modify, or hallucinate any other name
+    - Use only the exact text as specified.
+    - This applies to all clickable elements including buttons, links, and labels.
 """
 
 PROMPT_RULES_CUCUMBER="""
@@ -118,6 +140,24 @@ Rules:
         </ClassFile> 
 9. Always keep constants inside the class definition
 """
+
+# UI Automator Scroll Commands
+SCROLL_COMMANDS = {
+    "scroll_to_text_exact": lambda text: f'new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().text("{text}"))',
+    "scroll_to_text_contains": lambda text: f'new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_down_to_text": lambda text: f'new UiScrollable(new UiSelector().scrollable(true)).scrollForward().scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_up_to_text": lambda text: f'new UiScrollable(new UiSelector().scrollable(true)).scrollBackward().scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_until_found": lambda text: f'new UiScrollable(new UiSelector().scrollable(true)).setMaxSearchSwipes(10).scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_down_until_found": lambda text: f'new UiScrollable(new UiSelector().scrollable(true)).setMaxSearchSwipes(20).flingToEnd(5).scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_up_until_found": lambda text: f'new UiScrollable(new UiSelector().scrollable(true)).setMaxSearchSwipes(20).flingToBeginning(5).scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_to_resource_id": lambda resource_id: f'new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().resourceId("{resource_id}"))',
+    "scroll_to_class": lambda class_name: f'new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().className("{class_name}"))',
+    "scroll_vertical_to_text": lambda text: f'new UiScrollable(new UiSelector().scrollable(true).instance(0)).setAsVerticalList().scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_horizontal_to_text": lambda text: f'new UiScrollable(new UiSelector().scrollable(true).instance(0)).setAsHorizontalList().scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_down_vertical": lambda text: f'new UiScrollable(new UiSelector().scrollable(true).instance(0)).setAsVerticalList().scrollForward().scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_up_vertical": lambda text: f'new UiScrollable(new UiSelector().scrollable(true).instance(0)).setAsVerticalList().scrollBackward().scrollIntoView(new UiSelector().textContains("{text}"))',
+    "scroll_aggressively_until_found": lambda text: f'new UiScrollable(new UiSelector().scrollable(true)).setMaxSearchSwipes(50).setSwipeDeadZonePercentage(0.25).scrollIntoView(new UiSelector().textContains("{text}"))'
+}
 
 
 
