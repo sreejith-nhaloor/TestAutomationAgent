@@ -343,10 +343,18 @@ def process_generated_code(driver, generated_code, generated_code_raw):
     append_to_file(generated_code)
     
     fetureDetails = extract_tag_content("FeatureDetails", generated_code_raw)
+    pomDetails = extract_tag_content("POMDetails", generated_code_raw)
+
+
+    corelated_code = clean_and_extract_corelated_code(fetureDetails, pomDetails)
+    corelated_code = clean_refactored_code(corelated_code)
+    fetureDetails = extract_tag_content("FeatureDetails", corelated_code)
+    pomDetails = extract_tag_content("POMDetails", corelated_code)
+
     writeTofileCucumber(fetureDetails)
     writeTofileCucumber("\n")
 
-    pomDetails = extract_tag_content("POMDetails", generated_code_raw)
+    
     writeTofilePom(pomDetails)
     writeTofilePom("\n")
 
@@ -514,3 +522,17 @@ def execute_test_step(driver, idx, step, ui_elements):
         
     return return_exception, return_status, ui_elements
 
+
+def clean_refactored_code(raw):
+    raw = re.sub(r'<reasoning>.*?</reasoning>', '', raw, flags=re.DOTALL | re.IGNORECASE)
+
+    raw = raw.replace(";;", ";")
+    raw = raw.replace("..", ".")
+    raw = raw.replace("?.", ".")
+    
+    """Remove markdown code blocks and keep only Python code."""    
+    code_match = re.search(r"```(?:python)?\s*(.*?)```", raw, re.DOTALL | re.IGNORECASE)
+    
+    if code_match:
+        return code_match.group(1).strip()
+    return raw.strip()

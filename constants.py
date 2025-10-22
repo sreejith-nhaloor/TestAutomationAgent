@@ -106,13 +106,13 @@ Rules:
 PROMPT_RULES_POM = """
 Rules:
 1. Refactor the below poms and write page object model
-2. Give the classes with in a single <ClassCode> tag
+2. Give all the classes with in a single <ClassCode> tag
 3. For every single user interaction or step, Qwen must always generate the output blocks:
         <ClassCode>
-        ...JsClasses code here...
+        ...All JsClasses code here...
         </ClassCode> 
 4. Only return the final result in the required format. Omit any <reasoning> or descriptive content.
-5. 
+5. MUST return the classes with in a single tag <ClassCode>
 """
 
 PROMPT_RULES_TEST_CODE = """
@@ -122,7 +122,19 @@ Rules:
         - Any inline test execution statements (e.g., calls to page object methods used in tests)
         - Test suites and test cases (e.g., blocks using `describe`, `it`, or similar)
     Exclude all Page Object Model class definitions, helper methods, or any non-test related code.
-    Return a single JavaScript file containing all extracted test code with in a tag <TestCode>, preserving async/await syntax, function structure, and test framework constructs.    
+    Return a single JavaScript file containing all extracted test code with in a tag <TestCode>, preserving async/await syntax, function structure, and test framework constructs.     
+    All POM classes will be imported from '../../page-objects/<ClassName>'
+    All POM class imports must be at the top of the file in the format:
+        const <ClassName> = require('../../page-objects/<ClassName>');
+    All require statements must be unique    
+    Remove duplicate require statements throughout the file    
+    Make all page object instantiations local to their respective test functions
+    Maintain proper separation of concerns
+    Remove redundant code for require statements for Then, Given, When from '@cucumber/cucumber'
+    Remove redundant code for require statements for expect from 'chai'
+    Remove redundant import and require statements
+    All require statements for all POM classes MUST be at the top of the file
+    All class instantiations to use local variables instead of global ones
 """
 
 PROMPT_RULES_CLASS_CREATE = """
@@ -139,6 +151,7 @@ Rules:
         ...JsClasses code here...
         </ClassFile> 
 9. Always keep constants inside the class definition
+10. Add module.exports = ClassName; at the end of the class
 """
 
 # UI Automator Scroll Commands
@@ -186,3 +199,21 @@ Analyse flight search functionality on the mobile app.
 - Click on the 'Leaving From Button' input field.
 **TEST CASE END:**
 """
+
+
+PROMPT_RULES_CONTENT_CORELATION = """
+Rules:
+1. Re-write the code BDD-style implementation using Cucumber (with JavaScript)
+2. Refactor the code FeatureDetails and POMDetails properly with BDD style.
+3. Ensure that all step definitions are properly linked to their corresponding feature files.
+5. Return React Native Cucumber test cases inside a <FeatureDetails> tag.
+6. Return React Native Javascript Page Object Model and its test code inside a <POMDetails> tag.
+7. For every single user interaction or step, Qwen must always generate all 3 output blocks:
+        <FeatureDetails>
+        ...Cucumber scenario here...
+        </FeatureDetails>
+        <POMDetails>
+        ...Page Object class and test method here...
+        </POMDetails>
+"""
+
