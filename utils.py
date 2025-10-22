@@ -16,7 +16,7 @@ import tiktoken
 import yaml
 import re
 import shutil
-from constants import PROMPT_RULES_CUCUMBER,PROMPT_RULES_POM,PROMPT_RULES_TEST_CODE, PROMPT_RULES_CLASS_CREATE
+from constants import PROMPT_RULES_CUCUMBER,PROMPT_RULES_POM,PROMPT_RULES_TEST_CODE, PROMPT_RULES_CLASS_CREATE, PROMPT_RULES_CONTENT_CORELATION
 
 model_id = "qwen.qwen3-coder-480b-a35b-v1:0"
 # Create an Amazon Bedrock Runtime client.
@@ -48,7 +48,7 @@ request_payload = {
         }
     ],
     "temperature": 0.5,
-    "max_tokens": 4096,
+    "max_tokens": 8192,
     "top_p": 0.9
     }
 
@@ -99,7 +99,8 @@ def delete_output_file(test_case_id):
         file.write("")
     with open(file_name_pom, "w") as file:
         file.write("")   
-    
+
+def delete_output_folder(test_case_id):    
     delete_folder("extracted_files/"+test_case_id)
 
 def initiate_appium_driver():
@@ -247,6 +248,9 @@ def delete_folder(folder_path):
         print(f"Folder not found: {folder_path}")
 
 def create_files(test_case_id):
+
+    delete_output_folder(test_case_id)
+
     cuccumber_feature = clean_and_extract_cuccumber_code()
     cuccumber_feature = extract_tag_content("FeatureTag", cuccumber_feature)
     writeTofileCucumberFeature(cuccumber_feature,test_case_id)    
@@ -274,7 +278,7 @@ def clen_code_for_python_class_extract(raw):
 
 
 def extract_and_create_classes(source_code, test_case_id):
-    output_dir = "extracted_files/"+test_case_id+"/files/pom"
+    output_dir = "extracted_files/"+test_case_id+"/files/page-objects"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -295,6 +299,11 @@ def extract_and_create_classes(source_code, test_case_id):
             print(f"Created file for class: {class_name} at {class_file_path}")
         else:
             print(f"Skipping file creation for class: {class_name} due to extraction error.")
+
+    remove_classes_file = os.path.join(output_dir, f"Classes.js")
+    if os.path.exists(remove_classes_file):
+        os.remove(remove_classes_file)
+        print(f"Removed temporary Classes.js file at {remove_classes_file}")
 
 
 def extract_refactored_class_code(raw_code, class_name):
@@ -387,7 +396,7 @@ def extract_class_names_from_file(file_path):
 
 
 def extract_and_create_testclass(source_code, test_case_id ):
-    output_dir = "extracted_files/"+test_case_id+"/files/test-script"
+    output_dir = "extracted_files/"+test_case_id+"/files/step-definitions"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -397,7 +406,7 @@ def extract_and_create_testclass(source_code, test_case_id ):
         file.write(source_code + "\n")  
 
 def writeTofileCucumberFeature(code_to_write,test_case_id):    
-    output_dir = "extracted_files/"+test_case_id+"/files/feature"
+    output_dir = "extracted_files/"+test_case_id+"/files"
     os.makedirs(output_dir, exist_ok=True)
 
     if code_to_write and code_to_write.strip():         
@@ -431,27 +440,7 @@ Available UI elements:
 
 
 
-def clean_and_extract_pom_code():
-    with open(file_name_pom, "r") as f:
-            raw_code = f.read()
-
-    prompt = f"""
-You are a code rewriting assistant.
-
-{PROMPT_RULES_POM}
-       
-Here is the code:
-{raw_code}
-"""
-
-    try:
-        response_text = fetch_llm_response(prompt)
-        print("invoken AWS bedrock for POM start: ")
-        print(response_text)
-        print("invoken AWS bedrock for POM end: ")
-        return response_text;
-    except (ClientError, Exception) as e:
-        return "ERROR: Can't invoke '{model_id}'. Reason: {e}"    
+  
     
 
 
@@ -490,10 +479,18 @@ def process_generated_code(driver, generated_code, generated_code_raw):
         append_to_file(generated_code)
 
         fetureDetails = extract_tag_content("FeatureDetails", generated_code_raw)
+        pomDetails = extract_tag_content("POMDetails", generated_code_raw)
+
+
+        corelated_code = clean_and_extract_corelated_code(fetureDetails, pomDetails)
+
+        fetureDetails = extract_tag_content("FeatureDetails", corelated_code)
+        pomDetails = extract_tag_content("POMDetails", corelated_code)
+
         writeTofileCucumber(fetureDetails)
         writeTofileCucumber("\n")
 
-        pomDetails = extract_tag_content("POMDetails", generated_code_raw)
+        
         writeTofilePom(pomDetails)
         writeTofilePom("\n") 
         
@@ -559,3 +556,27 @@ def detect_current_screen(driver):
         return page_source
     except Exception as e:
         return f"Error detecting screen: {str(e)}"
+    
+
+def clean_and_extract_corelated_code(featureFileContent, pomFileContent):
+    with open(file_name_pom, "r") as f:
+            raw_code = f.read()
+
+    prompt = f"""
+You are a code extraction assistant.
+
+{PROMPT_RULES_CONTENT_CORELATION}
+    
+Here is feature code:
+{featureFileContent}
+Here is the pom code:
+{pomFileContent}
+"""
+    try:
+        response_text = fetch_llm_response(prompt)
+        print("invoken AWS bedrock for Gherkin start: ")
+        print(response_text)
+        print("invoken AWS bedrock for Gherkin end: ")
+        return response_text;
+    except (ClientError, Exception) as e:
+        return "ERROR: Can't invoke '{model_id}'. Reason: {e}"   
