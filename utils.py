@@ -16,7 +16,7 @@ import tiktoken
 import yaml
 import re
 import shutil
-from constants import PROMPT_RULES_CUCUMBER,PROMPT_RULES_POM,PROMPT_RULES_TEST_CODE, PROMPT_RULES_CLASS_CREATE, PROMPT_RULES_CONTENT_CORELATION
+from constants import PROMPT_RULES_CUCUMBER,PROMPT_RULES_POM,PROMPT_RULES_TEST_CODE, PROMPT_RULES_CLASS_CREATE, PROMPT_RULES_CONTENT_CORELATION, MAX_RETRY_ATTEMPTS
 
 model_id = "qwen.qwen3-coder-480b-a35b-v1:0"
 # Create an Amazon Bedrock Runtime client.
@@ -25,7 +25,7 @@ output_file_name = "generated_code.txt"
 file_name_cucumber = "generated_script_cucumber.txt"
 file_name_pom = "generated_script_pom.txt"
 file_name = "generated_script.txt"
-file_name_consolidated_cucumber = "complete_flight_booking.feature"
+file_name_consolidated_cucumber = ".feature"
 output_dir="extracted_files"
 
 with open("config.yaml", "r") as f:
@@ -134,7 +134,7 @@ def is_stale_element_error(error_msg):
 
 def execute_appium_code(driver, code):
     """Execute Appium code with proper exception handling for stale elements."""
-    max_retries = 3
+    max_retries = MAX_RETRY_ATTEMPTS
     for attempt in range(max_retries):
         try:
             exec(code, {
@@ -300,6 +300,75 @@ def extract_and_create_classes(source_code, test_case_id):
         else:
             print(f"Skipping file creation for class: {class_name} due to extraction error.")
 
+    # Check if all classes were successfully created
+    missing_classes = []
+    for class_name in class_names:
+        class_file_path = os.path.join(output_dir, f"{class_name}.js")
+        if not os.path.exists(class_file_path):
+            missing_classes.append(class_name)
+    
+    # If there are missing classes, try to extract them again with retry logic
+    if missing_classes:
+        print(f"⚠️ Missing class files: {missing_classes}")
+        
+        max_retries = 3
+        still_missing = missing_classes.copy()
+        
+        for retry_attempt in range(max_retries):
+            if not still_missing:
+                break
+                
+            print(f"🔄 Retry attempt {retry_attempt + 1}/{max_retries} for missing classes: {still_missing}")
+            newly_created = []
+            
+            for class_name in still_missing:
+                print(f"🔄 Retrying extraction for class: {class_name}")
+                class_file_path = os.path.join(output_dir, f"{class_name}.js")
+                class_code = extract_refactored_class_code(source_code, class_name)
+                
+                if class_code and "Class not found" not in class_code and "ERROR" not in class_code:
+                    with open(class_file_path, "w") as class_file:
+                        class_file.write(class_code)
+                    print(f"✅ Successfully created file for class: {class_name} on retry {retry_attempt + 1}")
+                    newly_created.append(class_name)
+                else:
+                    print(f"❌ Failed to extract class: {class_name} on retry {retry_attempt + 1}")                    
+            
+            # Update still_missing list by removing successfully created classes
+            still_missing = [cls for cls in still_missing if cls not in newly_created]
+            
+            if still_missing and retry_attempt < max_retries - 1:
+                print(f"⏳ Waiting before next retry attempt...")
+                time.sleep(2)  # Brief delay between retries
+        
+        # Final check and error logging for any remaining missing classes
+        if still_missing:
+            print(f"❌ Failed to create files for classes after {max_retries} attempts: {still_missing}")
+            for class_name in still_missing:
+                error_log = f"Failed to extract class '{class_name}' from source code after {max_retries} retry attempts. Trying with manual intervention."
+                print(f"ERROR: {error_log}")
+
+                for class_name in still_missing:
+                    class_file_path = os.path.join(output_dir, f"{class_name}.js")
+                    extract_single_class(source_code, class_name, class_file_path)
+        else:
+            print("✅ All missing classes were successfully created after retries.")
+    else:
+        print("✅ All classes were successfully created on first attempt.")
+
+
+    # Check if all classes were successfully created
+    missing_classes = []
+    for class_name in class_names:
+        class_file_path = os.path.join(output_dir, f"{class_name}.js")
+        if not os.path.exists(class_file_path):
+            missing_classes.append(class_name)
+
+    if missing_classes:    
+        print(f"⚠️ Missing class files post ALL methods: {missing_classes}")
+        
+
+    # Remove the temporary Classes.js file
     remove_classes_file = os.path.join(output_dir, f"Classes.js")
     if os.path.exists(remove_classes_file):
         os.remove(remove_classes_file)
@@ -321,10 +390,10 @@ Code:
 
     try:
         response_text = fetch_llm_response(prompt)
-        print("invoken AWS bedrock for Class Only start: ")
-        print(response_text)
+        #print("invoken AWS bedrock for Class Only start: ")
+        #print(response_text)
         response_text = extract_tag_content("ClassFile", response_text)
-        print("invoken AWS bedrock for Class Only end: ")
+        #print("invoken AWS bedrock for Class Only end: ")
         return response_text;
     except (ClientError, Exception) as e:
         return "ERROR: Can't invoke '{model_id}'. Reason: {e}"
@@ -348,7 +417,7 @@ Here is the code:
     try:
         response_text = fetch_llm_response(prompt)
         print("invoken AWS bedrock for POM start: ")
-        print(response_text)
+        #print(response_text)
         print("invoken AWS bedrock for POM end: ")
         return response_text;
     except (ClientError, Exception) as e:
@@ -400,7 +469,7 @@ def extract_and_create_testclass(source_code, test_case_id ):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    file_path = os.path.join(output_dir, f"TestRun.js")
+    file_path = os.path.join(output_dir, f"test-case-{test_case_id}.js")
 
     with open(file_path, "w") as file:
         file.write(source_code + "\n")  
@@ -410,7 +479,7 @@ def writeTofileCucumberFeature(code_to_write,test_case_id):
     os.makedirs(output_dir, exist_ok=True)
 
     if code_to_write and code_to_write.strip():         
-        filename = os.path.join(output_dir, file_name_consolidated_cucumber)
+        filename = os.path.join(output_dir, "test-case-"+test_case_id+file_name_consolidated_cucumber)
         with open(filename, "w") as f:
             f.write(code_to_write)
             f.write("\n\n")    
@@ -430,19 +499,13 @@ Available UI elements:
 
     try:
         response_text = fetch_llm_response(prompt)
-        print("invoken AWS bedrock for Cucumber start: ")
-        print(response_text)
-        print("invoken AWS bedrock for Cucumber end: ")
+        print("invoken AWS bedrock for BDD start: ")
+        #print(response_text)
+        print("invoken AWS bedrock for BDD end: ")
         return response_text;
     except (ClientError, Exception) as e:
         return "ERROR: Can't invoke '{model_id}'. Reason: {e}"
     
-
-
-
-  
-    
-
 
 def clean_and_extract_pom_test_code():
     with open(file_name_pom, "r") as f:
@@ -459,7 +522,7 @@ Here is the code:
     try:
         response_text = fetch_llm_response(prompt)
         print("invoken AWS bedrock for test code start: ")
-        print(response_text)
+        #print(response_text)
         print("invoken AWS bedrock for test code end: ")
         return response_text;
     except (ClientError, Exception) as e:
@@ -574,9 +637,87 @@ Here is the pom code:
 """
     try:
         response_text = fetch_llm_response(prompt)
-        print("invoken AWS bedrock for Gherkin start: ")
-        print(response_text)
-        print("invoken AWS bedrock for Gherkin end: ")
+        #print("invoken AWS bedrock for Gherkin start: ")
+        #print(response_text)
+        #print("invoken AWS bedrock for Gherkin end: ")
         return response_text;
     except (ClientError, Exception) as e:
         return "ERROR: Can't invoke '{model_id}'. Reason: {e}"   
+
+
+# Regex to extract classes with their full body (handles nested braces roughly)
+class_pattern = re.compile(r'class\s+(\w+)\s*{([^}]*(?:}(?!\s*class)[^}]*)*)}', re.DOTALL)
+
+# Regex to extract getters (properties)
+getter_pattern = re.compile(r'get\s+(\w+)\s*\([^)]*\)\s*{([^}]*)}', re.DOTALL)
+
+# Regex to extract methods (async or not)
+method_pattern = re.compile(r'(async\s+)?(\w+)\s*\([^)]*\)\s*{([^}]*)}', re.DOTALL)
+
+def extract_single_class(source_code, class_name, output_path):
+    # Extract the specific class
+    class_match = re.search(rf'class\s+{re.escape(class_name)}\s*{{([^}}]*(?:}}(?!\s*class)[^}}]*)*)', source_code, re.DOTALL)
+    
+    if not class_match:
+        print(f"Class {class_name} not found in source code")
+        return False
+    
+    class_body = class_match.group(1)
+    
+    # Extract getters and methods from the class body
+    properties = getter_pattern.findall(class_body)
+    methods = method_pattern.findall(class_body)
+    
+    # Filter out getters from methods (since method_pattern also matches getters)
+    getter_names = [p[0] for p in properties]
+    filtered_methods = [m for m in methods if m[1] not in getter_names]
+    
+    # Prepare output text
+    output = f"class {class_name} {{\n\n"
+    
+    # Add getters
+    for prop_name, prop_body in properties:
+        output += f"  // getter: {prop_name}\n"
+        output += f"  get {prop_name}() {{{prop_body.strip()}}}\n\n"
+    
+    # Add methods
+    for async_kw, method_name, method_body in filtered_methods:
+        async_str = async_kw.strip() + " " if async_kw else ""
+        output += f"  // method: {method_name}\n"
+        output += f"  {async_str}{method_name}() {{{method_body.strip()}}}\n\n"
+    
+    output += "}\n"
+
+    output = single_class_refactor(output, class_name)
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    # Save to file
+    with open(output_path, "w") as f:
+        f.write(output)
+    
+    print(f"Extracted class {class_name} to {output_path}")
+    return True
+
+def single_class_refactor(raw_code, class_name):
+    prompt = f"""
+You are a code formatting and extraction assistant.
+
+Code:
+{raw_code}
+
+1. Refactor the complete code for the class named '{class_name}'.
+2. Provide only the code for the class '{class_name}'.
+3. If the class '{class_name}' is not found, respond with 'Class not found'.
+{PROMPT_RULES_CLASS_CREATE}
+"""
+
+    try:
+        response_text = fetch_llm_response(prompt)
+        #print("invoken AWS bedrock for Class Only start: ")
+        #print(response_text)
+        response_text = extract_tag_content("ClassFile", response_text)
+        #print("invoken AWS bedrock for Class Only end: ")
+        return response_text;
+    except (ClientError, Exception) as e:
+        return "ERROR: Can't invoke '{model_id}'. Reason: {e}"
