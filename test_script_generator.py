@@ -1,6 +1,6 @@
 from utils import *
 from constants import PROMPT_RULES, MAX_RETRY_ATTEMPTS, SCROLL_COMMANDS
-from github_client import create_pull_request
+# from github_client import create_pull_request
 import time
 import re
 from selenium.webdriver.common.by import By
@@ -410,7 +410,7 @@ def run_test(test_case: TestCase) -> TestResult:
         
     if return_status == "success":
         create_files(test_case_id)
-        pr_url = create_pull_request()
+        # pr_url = create_pull_request()
         elements = "NA"
     else:
         pr_url = "ERROR"
