@@ -1,4 +1,4 @@
-MAX_RETRY_ATTEMPTS = 3
+MAX_RETRY_ATTEMPTS = 1
 
 TEST_STEPS = [
 	    "Close the popup by clicking the 'X' button.",
@@ -73,7 +73,7 @@ Rules:
         ...Page Object class and test method here...
         </POMDetails>
     This applies even to basic actions like input, clear, or tap.
-24. When performing a SUBMIT action on a BUTTON, follow these strict guidelines:
+24. When performing a SUBMIT or CLICK action on a BUTTON, follow these strict guidelines:
     1. Use exact text match only. Do not infer, modify, abbreviate, or hallucinate the element text.
     2. If 'Your Element Text' has commas, then split by commas and use contains for each part.
         Example: For 'Submit, Now', use:
@@ -86,7 +86,10 @@ Rules:
         - Labels
     5. Do not use partial matches, synonyms, or alternate phrasing.
     6. Do not change the locator strategy unless explicitly instructed.
-    7. Always preserve the integrity of the specified text.    
+    7. Always preserve the integrity of the specified text.   
+    8. Do not use android.widget.TextView for buttons
+    9. Always use android.widget.Button for buttons
+    10. Do not halucinate any button names 
 25. If an element is to be verified for existence, use below code snippet:
     - For exact text match and existence verification, use:
         element = driver.find_element(By.XPATH, "//*[@text='Your Element Text']");
@@ -100,7 +103,10 @@ Rules:
 PROMPT_RULES_CUCUMBER="""
 Rules:
 1. Create the features as a single feature with multiple steps
+1. Should not OMIT any scenarios while combining into a single feature
 2. Give the feature with in a tag <FeatureTag>
+3. MUST include all steps provided in the TEST STEPS section
+5. Do not include any other classes or code outside the specified feature.
 """
 
 PROMPT_RULES_POM = """
@@ -123,9 +129,9 @@ Rules:
         - Test suites and test cases (e.g., blocks using `describe`, `it`, or similar)
     Exclude all Page Object Model class definitions, helper methods, or any non-test related code.
     Return a single JavaScript file containing all extracted test code with in a tag <TestCode>, preserving async/await syntax, function structure, and test framework constructs.     
-    All POM classes will be imported from '../../page-objects/<ClassName>'
+    All POM classes will be imported from '../page-objects/<ClassName>'
     All POM class imports must be at the top of the file in the format:
-        const <ClassName> = require('../../page-objects/<ClassName>');
+        const <ClassName> = require('../page-objects/<ClassName>');
     All require statements must be unique    
     Remove duplicate require statements throughout the file    
     Make all page object instantiations local to their respective test functions
@@ -133,12 +139,16 @@ Rules:
     Remove redundant code for require statements for Then, Given, When from '@cucumber/cucumber'
     Remove redundant code for require statements for expect from 'chai'
     Remove redundant import and require statements
+    Then, Given, When should be imported only once at the top of the file like const { Given, When, Then } = require('@wdio/cucumber-framework');
+    Expect should be imported only once at the top of the file like const { expect } = require('chai');
     All require statements for all POM classes MUST be at the top of the file
     All class instantiations to use local variables instead of global ones
+    Add await driver.pause(10000); at the start of each test function
 """
 
 PROMPT_RULES_CLASS_CREATE = """
 Rules:
+1. MUST EXTRACT CLASSES WITHIN A SINGLE TAG <ClassFile>
 1. Ensure the extracted code is properly formatted and syntactically correct.
 2. MUST Extract the attributes and behaviours separately
 3. MUST Extract element identifiers as separate CONSTANTS within the class
