@@ -24,7 +24,7 @@ def is_stale_element_error(error_msg):
     ]
     return any(indicator in error_msg.lower() for indicator in stale_indicators)
 
-def safe_driver_operation(operation, max_retries=3, wait_time=2):
+def safe_driver_operation(operation, max_retries=MAX_RETRY_ATTEMPTS, wait_time=2):
     """Safely execute any driver operation with automatic retry on stale element errors."""
     for attempt in range(max_retries):
         try:
@@ -44,7 +44,7 @@ def safe_driver_operation(operation, max_retries=3, wait_time=2):
                 raise e
     return None
 
-def safe_find_elements(driver, by, value, max_retries=3):
+def safe_find_elements(driver, by, value, max_retries=MAX_RETRY_ATTEMPTS):
     """Safely find elements with automatic retry on stale element errors."""
     for attempt in range(max_retries):
         try:
@@ -59,7 +59,7 @@ def safe_find_elements(driver, by, value, max_retries=3):
                 raise e
     return []
 
-def perform_safe_scroll(driver, max_retries=3):
+def perform_safe_scroll(driver, max_retries=MAX_RETRY_ATTEMPTS):
     """Perform scrolling with retry logic for stale element errors."""
     scroll_methods = [
         # Method 1: Simple UiScrollable scrollForward
@@ -103,7 +103,7 @@ def perform_safe_scroll(driver, max_retries=3):
     print("❌ All scroll methods failed")
     return False
 
-def extract_ui_elements_with_retry(driver, max_retries=3):
+def extract_ui_elements_with_retry(driver, max_retries=MAX_RETRY_ATTEMPTS):
     """Extract UI elements with enhanced retry logic for stale element errors."""
     for attempt in range(max_retries):
         try:
@@ -505,7 +505,7 @@ def execute_test_step(driver, idx, step, ui_elements):
                 # Only refresh UI elements if not already refreshed due to stale element error
                 if not is_stale_element_error(error_msg):
                     ui_elements = extract_ui_elements(driver)     
-                if attempt == 3:
+                if attempt == MAX_RETRY_ATTEMPTS:
                     return_exception = e
                     return_status = "failed"
                     break
@@ -513,7 +513,7 @@ def execute_test_step(driver, idx, step, ui_elements):
             print(f"L340: ❌ No valid code generated for step {idx},  step {step}, retrying... attempt {attempt+1}")
             last_exception = "No valid code generated"
             attempt += 1            
-            if attempt == 3:
+            if attempt == MAX_RETRY_ATTEMPTS:
                 return_exception = "No valid code generated"
                 return_status = "failed"
                 break
