@@ -358,6 +358,11 @@ def process_generated_code(driver, generated_code, generated_code_raw):
     writeTofilePom(pomDetails)
     writeTofilePom("\n")
 
+def detect_current_screen(driver):
+            # Use UIAutomator or other means to get the current screen's activity name
+            current_activity = driver.current_activity
+            return current_activity
+
 def run_test(test_case: TestCase) -> TestResult:
     print("L208: 🚀 Running: Multi-step test")
     
@@ -378,9 +383,9 @@ def run_test(test_case: TestCase) -> TestResult:
     for idx, step in enumerate(steps, start=1):
         print(f"L224: \n🔹 Step {idx}: {step}")
         ui_elements = extract_ui_elements(driver)
-        #current_screen = detect_current_screen(driver)
         
-        #print(f"L228: \n🖥️ Current Screen Source: {current_screen[:5000]}...")  # Log first 500 chars
+        current_screen = detect_current_screen(driver)
+        print(f"L227: 🖥️ Current Screen Activity: {current_screen}")
 
         #log_ui_elements(ui_elements, "Available selectors on this page")
         ui_elements = remove_unwanted_elements(ui_elements)
