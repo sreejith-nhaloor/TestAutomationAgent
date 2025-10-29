@@ -1,4 +1,4 @@
-MAX_RETRY_ATTEMPTS = 1
+MAX_RETRY_ATTEMPTS = 3
 
 TEST_STEPS = [
 	    "Close the popup by clicking the 'X' button.",
@@ -90,6 +90,8 @@ Rules:
     8. Do not use android.widget.TextView for buttons
     9. Always use android.widget.Button for buttons
     10. Do not halucinate any button names 
+    11. If the 'Last executed code' and 'Current Exception' then try to find the element using the below code snippet:
+        driver.find_element(AppiumBy.XPATH,"//android.widget.Button[contains(@text, 'Your Partial Text')]").click()
 23. If an element is to be verified for existence, use below code snippet:
     - For exact text match and existence verification, use:
         element = driver.find_element(By.XPATH, "//*[@text='Your Element Text']");
