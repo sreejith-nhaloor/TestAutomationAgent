@@ -792,9 +792,8 @@ def clean_refactored_code(raw):
 
 def log_ui_elements(ui_elements, title):
     """Log UI elements with their details."""
-    print(f"L188: \n📍 {title}:")
-    for e in ui_elements:
-        if(e['class']=="android.widget.Button"):
+    print(f"795: \n📍 {title}:")
+    for e in ui_elements:        
             print(f"L190:   Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}, Class: {e['class']}, Focusable: {e['focusable']}, Enabled: {e['enabled']}, Focused: {e['focused']}, Selected: {e['selected']}")
 
 # Helper: remove elements with null/empty/"None" resource_id
