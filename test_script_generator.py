@@ -9,6 +9,173 @@ from models import TestCase
 from models import TestResult
 max_retry_attempts = MAX_RETRY_ATTEMPTS
 
+
+def run_test(test_case: TestCase) -> TestResult:
+    print("L208: 🚀 Running: Multi-step test")
+    
+    driver = initiate_appium_driver()
+    time.sleep(5)
+
+    # steps = TEST_STEPS
+    steps = test_case.steps
+    test_case_id = str(test_case.test_case_id)
+    
+    print(f"L217: Test Case ID: {str(test_case_id)}")
+    return_exception: any = None
+    return_status: str = "success"
+    pr_url = "ERROR"
+    
+    delete_output_file(test_case_id)  # Clear previous output file
+    
+    for idx, step in enumerate(steps, start=1):
+        print(f"L224: \n🔹 Step {idx}: {step}")
+        ui_elements = extract_ui_elements(driver)
+        
+        current_screen = detect_current_screen(driver)
+        print(f"L227: 🖥️ Current Screen Activity: {current_screen}")
+
+        #log_ui_elements(ui_elements, "Available selectors on this page")
+        ui_elements = remove_unwanted_elements(ui_elements)
+        if(idx>=12):
+            log_ui_elements(ui_elements, "Available selectors after filtering")
+
+        return_exception, return_status, ui_elements = execute_test_step(driver, idx, step, ui_elements)        
+        
+        print(f"L231: ⚠️ Step {idx} status, return_status : {return_status}")
+        # If step failed, check if page is scrollable and retry
+        if return_status == "failed":
+            print(f"L234: ⚠️ Step {idx} status, return_status : {return_status},  going to check for exceptions logic with scroll")
+            
+            is_scrollable = check_if_page_scrollable(driver)
+            
+            if is_scrollable:
+                return_exception, return_status, ui_elements = attempt_scroll_and_retry(driver, idx, step, ui_elements)
+            else:
+                print(f"L241: ❌ Page is not scrollable, cannot retry step {idx}")
+                
+        if return_status == "failed":
+            break
+
+        time.sleep(4)  # Small wait between steps
+
+    driver.quit()
+        
+    if return_status == "success":
+        create_files(test_case_id)
+        # pr_url = create_pull_request()
+        elements = "NA"
+    else:
+        pr_url = "ERROR"
+        elements = str(ui_elements)
+    
+    return TestResult(status=return_status, errors=str(return_exception),pull_request_url=pr_url, elements=elements)
+
+def execute_test_step(driver, idx, step, ui_elements):
+    attempt = 0
+    last_exception = None
+    return_exception = None
+    return_status = "success"
+    print(f"L298: ⚠️  execute_test_step in step {idx}, attempt {attempt+1} ")
+    while attempt < max_retry_attempts:
+        # Generate step-specific code, passing exception if any
+        generated_code_raw = resolve_actions_with_ui(step, ui_elements if attempt == 0 else ui_elements, last_exception)
+        generated_code = clean_generated_code(generated_code_raw)
+        if generated_code.strip():
+            try:
+                process_generated_code(driver, generated_code, generated_code_raw)
+                return_status = "success"
+                break  # Success, exit retry loop
+            except Exception as e:
+                error_msg = str(e)
+                print(f"L320: ❌ Error in step {idx},  step {step}, attempt {attempt+1} generated code: {generated_code}: {e}")
+                last_exception = e
+                
+                # Check if it's a stale element error
+                if is_stale_element_error(error_msg):
+                    print(f"L325: 🔄 Detected stale element error, refreshing UI elements...")
+                    # Refresh UI elements immediately for stale element errors
+                    ui_elements = extract_ui_elements(driver)
+                    ui_elements = remove_unwanted_elements(ui_elements)
+                    
+                attempt += 1       
+
+                # Only refresh UI elements if not already refreshed due to stale element error
+                if not is_stale_element_error(error_msg):
+                    ui_elements = extract_ui_elements(driver)     
+                if attempt == MAX_RETRY_ATTEMPTS:
+                    return_exception = e
+                    return_status = "failed"
+                    break
+        else:
+            print(f"L340: ❌ No valid code generated for step {idx},  step {step}, retrying... attempt {attempt+1}")
+            last_exception = "No valid code generated"
+            attempt += 1            
+            if attempt == MAX_RETRY_ATTEMPTS:
+                return_exception = "No valid code generated"
+                return_status = "failed"
+                break
+
+        time.sleep(4)  # Small wait between steps
+        
+    return return_exception, return_status, ui_elements
+
+def attempt_scroll_and_retry(driver, idx, step, ui_elements):
+    print(f"L255: 📜 Page is scrollable, attempting scroll and retry...")
+    original_ui_elements = ui_elements.copy()
+    return_exception, return_status = None, "failed"
+    max_scroll_attempts = 20
+    scroll_attempt = 0
+
+    # Keep scrolling until the set of UI elements stabilizes (no new elements found)
+    previous_ui_elements = original_ui_elements
+    while scroll_attempt < max_scroll_attempts:
+        try:
+            # Try scrolling down to reveal more elements with better error handling
+            scroll_success = perform_safe_scroll(driver)
+            if not scroll_success:
+                print(f"L266: ⚠️ Scroll operation failed, stopping scroll attempts for step {idx}")
+                break
+
+            # Wait for DOM to stabilize after scrolling
+            time.sleep(2)
+            
+            # Extract new UI elements after scrolling with retry logic
+            ui_elements_after_scroll = extract_ui_elements_with_retry(driver)
+            ui_elements_after_scroll = remove_unwanted_elements(ui_elements_after_scroll)
+
+            if(idx>=12):
+                log_ui_elements(ui_elements_after_scroll, "Available selectors after filtering")
+
+            # If the UI elements after scroll are the same as previous, stop scrolling
+            if ui_elements_equal(previous_ui_elements, ui_elements_after_scroll):
+                print(f"L280: ⚠️ Scrolling did not reveal new elements, stopping scroll attempts for step {idx}, step {step},")
+                break
+            else:
+                print(f"L283: 🔄 Retrying step {idx},  step {step}, with new UI elements after scrolling (attempt {scroll_attempt+1})...")
+                return_exception, return_status, ui_elements = execute_test_step(driver, idx, step, ui_elements_after_scroll)
+
+                if return_status == "success":
+                    #print(f"L287: ✅ Step {idx},  step {step}, succeeded after scrolling!")
+                    break
+                else:
+                    print(f"L290: ❌ Step {idx},  step {step}, still failed after scrolling, will try to scroll again.")
+                    previous_ui_elements = ui_elements_after_scroll
+                    scroll_attempt += 1
+        except Exception as scroll_error:
+            print(f"L294: ⚠️ Error during scrolling: {scroll_error}")
+            if is_stale_element_error(str(scroll_error)):
+                print(f"L296: 🔄 Stale element error detected, waiting and retrying scroll...")
+                time.sleep(3)  # Wait longer for DOM to stabilize
+                scroll_attempt += 1
+                continue
+            else:
+                print(f"L300: ❌ Non-stale error during scrolling, stopping attempts")
+                break        
+
+    return return_exception, return_status, ui_elements
+
+
+
 def is_stale_element_error(error_msg):
     """Check if the error is related to stale elements."""
     stale_indicators = [
@@ -302,9 +469,6 @@ def clean_generated_code(raw):
     return raw.strip()
 
 
-
-
-
 def resolve_actions_with_ui(nl_step, ui_elements, exception=None):
     context = "\n".join([
         f"Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}, Focusable: {e['focusable']}, Enabled: {e['enabled']}, Focused: {e['focused']}, Selected: {e['selected']}, Class: {e['class']} "
@@ -323,16 +487,6 @@ Step: "{nl_step}"
 """
     return fetch_llm_response(prompt)
 
-# Helper: remove elements with null/empty/"None" resource_id
-def remove_unwanted_elements(ui_elements):
-    return [e for e in ui_elements if e.get("resource_id") != "null" or e.get("content_desc") != "null" or e.get("text")]
-
-def log_ui_elements(ui_elements, title):
-    """Log UI elements with their details."""
-    print(f"L188: \n📍 {title}:")
-    for e in ui_elements:
-        if(e['class']=="android.widget.Button"):
-            print(f"L190:   Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}, Class: {e['class']}, Focusable: {e['focusable']}, Enabled: {e['enabled']}, Focused: {e['focused']}, Selected: {e['selected']}")
 
 def process_generated_code(driver, generated_code, generated_code_raw):
     """Process and execute the generated code, then save to files."""
@@ -358,186 +512,4 @@ def process_generated_code(driver, generated_code, generated_code_raw):
     writeTofilePom(pomDetails)
     writeTofilePom("\n")
 
-def detect_current_screen(driver):
-            # Use UIAutomator or other means to get the current screen's activity name
-            current_activity = driver.current_activity
-            return current_activity
 
-def run_test(test_case: TestCase) -> TestResult:
-    print("L208: 🚀 Running: Multi-step test")
-    
-    driver = initiate_appium_driver()
-    time.sleep(5)
-
-    # steps = TEST_STEPS
-    steps = test_case.steps
-    test_case_id = str(test_case.test_case_id)
-    
-    print(f"L217: Test Case ID: {str(test_case_id)}")
-    return_exception: any = None
-    return_status: str = "success"
-    pr_url = "ERROR"
-    
-    delete_output_file(test_case_id)  # Clear previous output file
-    
-    for idx, step in enumerate(steps, start=1):
-        print(f"L224: \n🔹 Step {idx}: {step}")
-        ui_elements = extract_ui_elements(driver)
-        
-        current_screen = detect_current_screen(driver)
-        print(f"L227: 🖥️ Current Screen Activity: {current_screen}")
-
-        #log_ui_elements(ui_elements, "Available selectors on this page")
-        ui_elements = remove_unwanted_elements(ui_elements)
-        if(idx>=12):
-            log_ui_elements(ui_elements, "Available selectors after filtering")
-
-        return_exception, return_status, ui_elements = execute_test_step(driver, idx, step, ui_elements)        
-        
-        print(f"L231: ⚠️ Step {idx} status, return_status : {return_status}")
-        # If step failed, check if page is scrollable and retry
-        if return_status == "failed":
-            print(f"L234: ⚠️ Step {idx} status, return_status : {return_status},  going to check for exceptions logic with scroll")
-            
-            is_scrollable = check_if_page_scrollable(driver)
-            
-            if is_scrollable:
-                return_exception, return_status, ui_elements = attempt_scroll_and_retry(driver, idx, step, ui_elements)
-            else:
-                print(f"L241: ❌ Page is not scrollable, cannot retry step {idx}")
-                
-        if return_status == "failed":
-            break
-
-        time.sleep(4)  # Small wait between steps
-
-    driver.quit()
-        
-    if return_status == "success":
-        create_files(test_case_id)
-        # pr_url = create_pull_request()
-        elements = "NA"
-    else:
-        pr_url = "ERROR"
-        elements = str(ui_elements)
-    
-    return TestResult(status=return_status, errors=str(return_exception),pull_request_url=pr_url, elements=elements)
-
-def attempt_scroll_and_retry(driver, idx, step, ui_elements):
-    print(f"L255: 📜 Page is scrollable, attempting scroll and retry...")
-    original_ui_elements = ui_elements.copy()
-    return_exception, return_status = None, "failed"
-    max_scroll_attempts = 20
-    scroll_attempt = 0
-
-    # Keep scrolling until the set of UI elements stabilizes (no new elements found)
-    previous_ui_elements = original_ui_elements
-    while scroll_attempt < max_scroll_attempts:
-        try:
-            # Try scrolling down to reveal more elements with better error handling
-            scroll_success = perform_safe_scroll(driver)
-            if not scroll_success:
-                print(f"L266: ⚠️ Scroll operation failed, stopping scroll attempts for step {idx}")
-                break
-
-            # Wait for DOM to stabilize after scrolling
-            time.sleep(2)
-            
-            # Extract new UI elements after scrolling with retry logic
-            ui_elements_after_scroll = extract_ui_elements_with_retry(driver)
-            ui_elements_after_scroll = remove_unwanted_elements(ui_elements_after_scroll)
-
-            if(idx>=12):
-                log_ui_elements(ui_elements_after_scroll, "Available selectors after filtering")
-
-            # If the UI elements after scroll are the same as previous, stop scrolling
-            if ui_elements_equal(previous_ui_elements, ui_elements_after_scroll):
-                print(f"L280: ⚠️ Scrolling did not reveal new elements, stopping scroll attempts for step {idx}, step {step},")
-                break
-            else:
-                print(f"L283: 🔄 Retrying step {idx},  step {step}, with new UI elements after scrolling (attempt {scroll_attempt+1})...")
-                return_exception, return_status, ui_elements = execute_test_step(driver, idx, step, ui_elements_after_scroll)
-
-                if return_status == "success":
-                    print(f"L287: ✅ Step {idx},  step {step}, succeeded after scrolling!")
-                    break
-                else:
-                    print(f"L290: ❌ Step {idx},  step {step}, still failed after scrolling, will try to scroll again.")
-                    previous_ui_elements = ui_elements_after_scroll
-                    scroll_attempt += 1
-        except Exception as scroll_error:
-            print(f"L294: ⚠️ Error during scrolling: {scroll_error}")
-            if is_stale_element_error(str(scroll_error)):
-                print(f"L296: 🔄 Stale element error detected, waiting and retrying scroll...")
-                time.sleep(3)  # Wait longer for DOM to stabilize
-                scroll_attempt += 1
-                continue
-            else:
-                print(f"L300: ❌ Non-stale error during scrolling, stopping attempts")
-                break        
-
-    return return_exception, return_status, ui_elements
-
-def execute_test_step(driver, idx, step, ui_elements):
-    attempt = 0
-    last_exception = None
-    return_exception = None
-    return_status = "success"
-    print(f"L298: ⚠️  execute_test_step in step {idx}, attempt {attempt+1} ")
-    while attempt < max_retry_attempts:
-        # Generate step-specific code, passing exception if any
-        generated_code_raw = resolve_actions_with_ui(step, ui_elements if attempt == 0 else ui_elements, last_exception)
-        generated_code = clean_generated_code(generated_code_raw)
-        if generated_code.strip():
-            try:
-                process_generated_code(driver, generated_code, generated_code_raw)
-                return_status = "success"
-                break  # Success, exit retry loop
-            except Exception as e:
-                error_msg = str(e)
-                print(f"L320: ❌ Error in step {idx},  step {step}, attempt {attempt+1} generated code: {generated_code}: {e}")
-                last_exception = e
-                
-                # Check if it's a stale element error
-                if is_stale_element_error(error_msg):
-                    print(f"L325: 🔄 Detected stale element error, refreshing UI elements...")
-                    # Refresh UI elements immediately for stale element errors
-                    ui_elements = extract_ui_elements(driver)
-                    ui_elements = remove_unwanted_elements(ui_elements)
-                    
-                attempt += 1       
-
-                # Only refresh UI elements if not already refreshed due to stale element error
-                if not is_stale_element_error(error_msg):
-                    ui_elements = extract_ui_elements(driver)     
-                if attempt == MAX_RETRY_ATTEMPTS:
-                    return_exception = e
-                    return_status = "failed"
-                    break
-        else:
-            print(f"L340: ❌ No valid code generated for step {idx},  step {step}, retrying... attempt {attempt+1}")
-            last_exception = "No valid code generated"
-            attempt += 1            
-            if attempt == MAX_RETRY_ATTEMPTS:
-                return_exception = "No valid code generated"
-                return_status = "failed"
-                break
-
-        time.sleep(4)  # Small wait between steps
-        
-    return return_exception, return_status, ui_elements
-
-
-def clean_refactored_code(raw):
-    raw = re.sub(r'<reasoning>.*?</reasoning>', '', raw, flags=re.DOTALL | re.IGNORECASE)
-
-    raw = raw.replace(";;", ";")
-    raw = raw.replace("..", ".")
-    raw = raw.replace("?.", ".")
-    
-    """Remove markdown code blocks and keep only Python code."""    
-    code_match = re.search(r"```(?:python)?\s*(.*?)```", raw, re.DOTALL | re.IGNORECASE)
-    
-    if code_match:
-        return code_match.group(1).strip()
-    return raw.strip()
