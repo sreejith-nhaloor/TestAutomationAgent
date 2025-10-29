@@ -36,9 +36,7 @@ def run_test(test_case: TestCase) -> TestResult:
 
         #log_ui_elements(ui_elements, "Available selectors on this page")
         ui_elements = remove_unwanted_elements(ui_elements)
-        if(idx>=12):
-            log_ui_elements(ui_elements, "Available selectors after filtering")
-
+                
         return_exception, return_status, ui_elements = execute_test_step(driver, idx, step, ui_elements)        
         
         print(f"L231: ⚠️ Step {idx} status, return_status : {return_status}")
@@ -73,22 +71,25 @@ def run_test(test_case: TestCase) -> TestResult:
 def execute_test_step(driver, idx, step, ui_elements):
     attempt = 0
     last_exception = None
+    last_executed_code = None
     return_exception = None
     return_status = "success"
     print(f"L298: ⚠️  execute_test_step in step {idx}, attempt {attempt+1} ")
     while attempt < max_retry_attempts:
         # Generate step-specific code, passing exception if any
-        generated_code_raw = resolve_actions_with_ui(step, ui_elements if attempt == 0 else ui_elements, last_exception)
+        generated_code_raw = resolve_actions_with_ui(step, ui_elements if attempt == 0 else ui_elements, last_exception, last_executed_code)
         generated_code = clean_generated_code(generated_code_raw)
         if generated_code.strip():
             try:
                 process_generated_code(driver, generated_code, generated_code_raw)
                 return_status = "success"
                 break  # Success, exit retry loop
-            except Exception as e:
+            except Exception as e:                
                 error_msg = str(e)
+                log_ui_elements(ui_elements, "Available selectors after filtering")
                 print(f"L320: ❌ Error in step {idx},  step {step}, attempt {attempt+1} generated code: {generated_code}: {e}")
                 last_exception = e
+                last_executed_code = generated_code
                 
                 # Check if it's a stale element error
                 if is_stale_element_error(error_msg):
@@ -469,7 +470,7 @@ def clean_generated_code(raw):
     return raw.strip()
 
 
-def resolve_actions_with_ui(nl_step, ui_elements, exception=None):
+def resolve_actions_with_ui(nl_step, ui_elements, exception=None, last_executed_code=None):
     context = "\n".join([
         f"Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}, Focusable: {e['focusable']}, Enabled: {e['enabled']}, Focused: {e['focused']}, Selected: {e['selected']}, Class: {e['class']} "
         for e in ui_elements if e["text"] or e["content_desc"] or e["resource_id"] or e["focusable"] or e['enabled'] or e['focused'] or e['selected'] or e['class']
@@ -482,7 +483,9 @@ Available UI elements:
 {context}
 
 {PROMPT_RULES}
-Current Exception (if any): {exception}
+CurrentException(if any): {exception}
+LastExecutedCode (if any): {last_executed_code}
+
 Step: "{nl_step}"
 """
     return fetch_llm_response(prompt)
