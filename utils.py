@@ -16,7 +16,7 @@ import tiktoken
 import yaml
 import re
 import shutil
-from constants import PROMPT_RULES_CUCUMBER,PROMPT_RULES_POM,PROMPT_RULES_TEST_CODE, PROMPT_RULES_CLASS_CREATE, PROMPT_RULES_CONTENT_CORELATION, MAX_RETRY_ATTEMPTS
+from constants import PROMPT_RULES_CUCUMBER,PROMPT_RULES_POM,PROMPT_RULES_TEST_CODE, PROMPT_RULES_CLASS_CREATE, PROMPT_RULES_CONTENT_CORELATION, MAX_RETRY_ATTEMPTS, EXTRACT_CLASS_NAME_RULES
 
 model_id = "qwen.qwen3-coder-480b-a35b-v1:0"
 # Create an Amazon Bedrock Runtime client.
@@ -426,12 +426,13 @@ Here is the code:
 def extract_class_names_from_file(file_path):
     """
     Extract class names from a JavaScript/TypeScript file containing Page Object Model classes.
+    Uses both regex-based and LLM-based extraction methods for comprehensive results.
     
     Args:
         file_path (str): Path to the file to analyze
         
     Returns:
-        list: List of unique class names found in the file
+        list: List of unique class names found in the file using both methods
     """
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}")
@@ -441,25 +442,34 @@ def extract_class_names_from_file(file_path):
         with open(file_path, 'r', encoding='utf-8') as file:
             content = file.read()
         
-        # Regular expression to match class declarations
-        # Matches: class ClassName { or class ClassName{
+        # Method 1: Regex-based extraction
+        print("🔍 Extracting class names using regex...")
         class_pattern = r'class\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{'
+        regex_matches = re.findall(class_pattern, content)
+        print(f"📋 Regex found classes: {regex_matches}")
         
-        # Find all class names
-        class_matches = re.findall(class_pattern, content)
+        # Method 2: LLM-based extraction
+        llm_classes = extract_class_names_with_llm(content)
+        
+        # Method 3: Combine and deduplicate results
+        print("🔄 Combining results from both methods...")
+        all_classes = regex_matches + llm_classes
         
         # Remove duplicates while preserving order
         unique_classes = []
         seen = set()
-        for class_name in class_matches:
-            if class_name not in seen:
+        for class_name in all_classes:
+            if class_name not in seen and class_name:  # Ensure non-empty class names
                 unique_classes.append(class_name)
                 seen.add(class_name)
+        
+        print(f"✅ Final unique class list: {unique_classes}")
+        print(f"📊 Total classes found: {len(unique_classes)} (Regex: {len(regex_matches)}, LLM: {len(llm_classes)})")
         
         return unique_classes
         
     except Exception as e:
-        print(f"Error reading file {file_path}: {e}")
+        print(f"❌ Error reading file {file_path}: {e}")
         return []
 
 
@@ -611,14 +621,7 @@ def check_if_page_scrollable(driver):
         print(f"⚠️ Error checking scrollability: {e}")
         return False
     
-from appium import webdriver
 
-def detect_current_screen(driver):
-    try:
-        page_source = driver.page_source
-        return page_source
-    except Exception as e:
-        return f"Error detecting screen: {str(e)}"
     
 
 def clean_and_extract_corelated_code(featureFileContent, pomFileContent):
@@ -721,3 +724,78 @@ Code:
         return response_text;
     except (ClientError, Exception) as e:
         return "ERROR: Can't invoke '{model_id}'. Reason: {e}"
+
+
+def extract_class_names_with_llm(content):
+    """
+    Extract class names from JavaScript/TypeScript code using LLM.
+    
+    Args:
+        content (str): The code content to analyze
+
+    Returns:
+        list: List of class names found by the LLM
+    """
+    print("🤖 Extracting class names using LLM...")
+    llm_classes = []
+    try:
+        prompt = f"""
+        You are a code analysis assistant. Extract all class names from the following JavaScript/TypeScript code.
+
+        Code:
+        {content}
+
+        Instructions:
+        {EXTRACT_CLASS_NAME_RULES}
+
+        Example format: ClassName1, ClassName2, ClassName3
+        """
+
+        llm_response = fetch_llm_response(prompt)
+
+        if llm_response and "NO_CLASSES_FOUND" not in llm_response.upper():
+            # Parse LLM response to extract class names
+            llm_class_text = llm_response.strip()
+            # Split by comma and clean up whitespace
+            llm_classes = [name.strip() for name in llm_class_text.split(',') if name.strip()]
+            # Filter out any non-class-like names (basic validation)
+            llm_classes = [name for name in llm_classes if re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', name)]
+            print(f"🤖 LLM found classes: {llm_classes}")
+        else:
+            print("🤖 LLM found no classes")
+
+    except Exception as llm_error:
+        print(f"⚠️ LLM extraction failed: {llm_error}")
+        llm_classes = []
+
+    return llm_classes
+
+
+def detect_current_screen(driver):
+            # Use UIAutomator or other means to get the current screen's activity name
+            current_activity = driver.current_activity
+            return current_activity
+
+def clean_refactored_code(raw):
+    raw = re.sub(r'<reasoning>.*?</reasoning>', '', raw, flags=re.DOTALL | re.IGNORECASE)
+
+    raw = raw.replace(";;", ";")
+    raw = raw.replace("..", ".")
+    raw = raw.replace("?.", ".")
+    
+    """Remove markdown code blocks and keep only Python code."""    
+    code_match = re.search(r"```(?:python)?\s*(.*?)```", raw, re.DOTALL | re.IGNORECASE)
+    
+    if code_match:
+        return code_match.group(1).strip()
+    return raw.strip()
+
+def log_ui_elements(ui_elements, title):
+    """Log UI elements with their details."""
+    print(f"795: \n📍 {title}:")
+    for e in ui_elements:        
+            print(f"L190:   Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}, Class: {e['class']}, Focusable: {e['focusable']}, Enabled: {e['enabled']}, Focused: {e['focused']}, Selected: {e['selected']}")
+
+# Helper: remove elements with null/empty/"None" resource_id
+def remove_unwanted_elements(ui_elements):
+    return [e for e in ui_elements if e.get("resource_id") != "null" or e.get("content_desc") != "null" or e.get("text")]

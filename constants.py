@@ -1,4 +1,4 @@
-MAX_RETRY_ATTEMPTS = 1
+MAX_RETRY_ATTEMPTS = 3
 
 TEST_STEPS = [
 	    "Close the popup by clicking the 'X' button.",
@@ -22,7 +22,7 @@ TEST_STEPS = [
 PROMPT_RULES = """
 Rules:
 1. To interact with an input field using only XPath for element identification—do not use resource-id, accessibility ID, class name, or text attributes.
-1. Use ONLY selectors from the provided list. Do NOT invent or use unlisted selectors or methods.
+2. Use ONLY selectors from the provided list. Do NOT invent or use unlisted selectors or methods.
 3. For waiting, always use:
    WebDriverWait(driver, 10).until(EC.presence_of_element_located((AppiumBy.ACCESSIBILITY_ID, "<value>")))
 4. Return executable Python code inside a <PythonDetails> tag:
@@ -49,20 +49,20 @@ Rules:
     driver.find_element(By.XPATH, "//*[@text='<Text>']")
 13. If an element data is to be cleared Text, always use:
    driver.find_element(By.XPATH, "//*[@text='<Text>']").clear()
-15. If an element is having only Content-Desc, always use:
+14. If an element is having only Content-Desc, always use:
    driver.find_element(AppiumBy.ACCESSIBILITY_ID, "<content-desc>")
-16. Do not consider suggestion text like 'Search by city or airport'
-17. For a non-focusable element always add inside the find_element:
+15. Do not consider suggestion text like 'Search by city or airport'
+16. For a non-focusable element always add inside the find_element:
      @focusable='false'  
-18. Remove all semicolons (;) that are:
+17. Remove all semicolons (;) that are:
     At the end of a line.
     Immediately before or after a method call (e.g., .click(); .click()).
-19. Fix misplaced dots (.):
+18. Fix misplaced dots (.):
     If a dot (.) appears after a semicolon, move it to the correct position before the method (e.g., ;.click() → .click()).
-20. Preserve valid method chaining:
+19. Preserve valid method chaining:
     Ensure that method calls like .click() remain intact and attached to the correct object. 
-21. Ensure click() is prefixed with a dot (.) always    
-22. For every single user interaction or step, Qwen must always generate all 3 output blocks:
+20. Ensure click() is prefixed with a dot (.) always    
+21. For every single user interaction or step, Qwen must always generate all 3 output blocks:
         <PythonDetails>
         ...Python code here...
         </PythonDetails>
@@ -73,7 +73,7 @@ Rules:
         ...Page Object class and test method here...
         </POMDetails>
     This applies even to basic actions like input, clear, or tap.
-24. When performing a SUBMIT or CLICK action on a BUTTON, follow these strict guidelines:
+22. When performing a SUBMIT or CLICK action on a BUTTON, follow these strict guidelines:
     1. Use exact text match only. Do not infer, modify, abbreviate, or hallucinate the element text.
     2. If 'Your Element Text' has commas, then split by commas and use contains for each part.
         Example: For 'Submit, Now', use:
@@ -90,7 +90,9 @@ Rules:
     8. Do not use android.widget.TextView for buttons
     9. Always use android.widget.Button for buttons
     10. Do not halucinate any button names 
-25. If an element is to be verified for existence, use below code snippet:
+    11. If the 'Last executed code' and 'Current Exception' then try to find the element using the below code snippet:
+        driver.find_element(AppiumBy.XPATH,"//android.widget.Button[contains(@text, 'Your Partial Text')]").click()
+23. If an element is to be verified for existence, use below code snippet:
     - For exact text match and existence verification, use:
         element = driver.find_element(By.XPATH, "//*[@text='Your Element Text']");
         assert element is not None;
@@ -103,9 +105,9 @@ Rules:
 PROMPT_RULES_CUCUMBER="""
 Rules:
 1. Create the features as a single feature with multiple steps
-1. Should not OMIT any scenarios while combining into a single feature
-2. Give the feature with in a tag <FeatureTag>
-3. MUST include all steps provided in the TEST STEPS section
+2. Should not OMIT any scenarios while combining into a single feature
+3. Give the feature with in a tag <FeatureTag>
+4. MUST include all steps provided in the TEST STEPS section
 5. Do not include any other classes or code outside the specified feature.
 """
 
@@ -149,19 +151,19 @@ Rules:
 PROMPT_RULES_CLASS_CREATE = """
 Rules:
 1. MUST EXTRACT CLASSES WITHIN A SINGLE TAG <ClassFile>
-1. Ensure the extracted code is properly formatted and syntactically correct.
-2. MUST Extract the attributes and behaviours separately
-3. MUST Extract element identifiers as separate CONSTANTS within the class
-4. Include necessary imports if they are part of the original code.
-5. Do not include any other classes or code outside the specified class.
-6. Ensure the output is a valid JavaScript class definition.
-7. Give the classes with in a single tag <ClassFile>
-8. For every single user interaction or step, Qwen must always generate the output blocks:
+2. Ensure the extracted code is properly formatted and syntactically correct.
+3. MUST Extract the attributes and behaviours separately
+4. MUST Extract element identifiers as separate CONSTANTS within the class
+5. Include necessary imports if they are part of the original code.
+6. Do not include any other classes or code outside the specified class.
+7. Ensure the output is a valid JavaScript class definition.
+8. Give the classes with in a single tag <ClassFile>
+9. For every single user interaction or step, Qwen must always generate the output blocks:
         <ClassFile>
         ...JsClasses code here...
         </ClassFile> 
-9. Always keep constants inside the class definition
-10. Add module.exports = ClassName; at the end of the class
+10. Always keep constants inside the class definition
+11. Add module.exports = ClassName; at the end of the class
 """
 
 # UI Automator Scroll Commands
@@ -216,9 +218,9 @@ Rules:
 1. Re-write the code BDD-style implementation using Cucumber (with JavaScript)
 2. Refactor the code FeatureDetails and POMDetails properly with BDD style.
 3. Ensure that all step definitions are properly linked to their corresponding feature files.
-5. Return React Native Cucumber test cases inside a <FeatureDetails> tag.
-6. Return React Native Javascript Page Object Model and its test code inside a <POMDetails> tag.
-7. For every single user interaction or step, Qwen must always generate all 3 output blocks:
+4. Return React Native Cucumber test cases inside a <FeatureDetails> tag.
+5. Return React Native Javascript Page Object Model and its test code inside a <POMDetails> tag.
+6. For every single user interaction or step, Qwen must always generate all 3 output blocks:
         <FeatureDetails>
         ...Cucumber scenario here...
         </FeatureDetails>
@@ -227,3 +229,9 @@ Rules:
         </POMDetails>
 """
 
+EXTRACT_CLASS_NAME_RULES = """
+1. Identify all class declarations in the code
+2. Extract only the class names (not methods, properties, or other identifiers)
+3. Return the class names as a comma-separated list
+4. If no classes are found, return "NO_CLASSES_FOUND"
+"""
