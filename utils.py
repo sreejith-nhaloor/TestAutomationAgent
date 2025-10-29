@@ -16,7 +16,7 @@ import tiktoken
 import yaml
 import re
 import shutil
-from constants import PROMPT_RULES_CUCUMBER,PROMPT_RULES_POM,PROMPT_RULES_TEST_CODE, PROMPT_RULES_CLASS_CREATE, PROMPT_RULES_CONTENT_CORELATION, MAX_RETRY_ATTEMPTS
+from constants import PROMPT_RULES_CUCUMBER,PROMPT_RULES_POM,PROMPT_RULES_TEST_CODE, PROMPT_RULES_CLASS_CREATE, PROMPT_RULES_CONTENT_CORELATION, MAX_RETRY_ATTEMPTS, EXTRACT_CLASS_NAME_RULES
 
 model_id = "qwen.qwen3-coder-480b-a35b-v1:0"
 # Create an Amazon Bedrock Runtime client.
@@ -746,10 +746,7 @@ def extract_class_names_with_llm(content):
         {content}
 
         Instructions:
-        1. Identify all class declarations in the code
-        2. Extract only the class names (not methods, properties, or other identifiers)
-        3. Return the class names as a comma-separated list
-        4. If no classes are found, return "NO_CLASSES_FOUND"
+        {EXTRACT_CLASS_NAME_RULES}
 
         Example format: ClassName1, ClassName2, ClassName3
         """
@@ -772,3 +769,34 @@ def extract_class_names_with_llm(content):
         llm_classes = []
 
     return llm_classes
+
+
+def detect_current_screen(driver):
+            # Use UIAutomator or other means to get the current screen's activity name
+            current_activity = driver.current_activity
+            return current_activity
+
+def clean_refactored_code(raw):
+    raw = re.sub(r'<reasoning>.*?</reasoning>', '', raw, flags=re.DOTALL | re.IGNORECASE)
+
+    raw = raw.replace(";;", ";")
+    raw = raw.replace("..", ".")
+    raw = raw.replace("?.", ".")
+    
+    """Remove markdown code blocks and keep only Python code."""    
+    code_match = re.search(r"```(?:python)?\s*(.*?)```", raw, re.DOTALL | re.IGNORECASE)
+    
+    if code_match:
+        return code_match.group(1).strip()
+    return raw.strip()
+
+def log_ui_elements(ui_elements, title):
+    """Log UI elements with their details."""
+    print(f"L188: \n📍 {title}:")
+    for e in ui_elements:
+        if(e['class']=="android.widget.Button"):
+            print(f"L190:   Text: {e['text']}, Resource-ID: {e['resource_id']}, Content-Desc: {e['content_desc']}, Class: {e['class']}, Focusable: {e['focusable']}, Enabled: {e['enabled']}, Focused: {e['focused']}, Selected: {e['selected']}")
+
+# Helper: remove elements with null/empty/"None" resource_id
+def remove_unwanted_elements(ui_elements):
+    return [e for e in ui_elements if e.get("resource_id") != "null" or e.get("content_desc") != "null" or e.get("text")]
